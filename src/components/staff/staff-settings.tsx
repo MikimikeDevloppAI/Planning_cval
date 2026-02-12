@@ -53,22 +53,22 @@ export function StaffSettings({ staffId, settings }: StaffSettingsProps) {
 
   return (
     <div className="space-y-5">
-      <h4 className="text-sm font-semibold text-gray-700">
+      <h4 className="text-sm font-semibold text-foreground">
         Paramètres Secrétaire
       </h4>
 
       {/* Flexible toggle */}
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-sm font-medium text-gray-800">Flexible</p>
-          <p className="text-xs text-gray-500">
+          <p className="text-sm font-medium text-foreground">Flexible</p>
+          <p className="text-xs text-muted-foreground">
             Peut être assignée à différents sites/départements
           </p>
         </div>
         <button
           onClick={() => setIsFlexible(!isFlexible)}
           className={`relative w-11 h-6 rounded-full transition-colors ${
-            isFlexible ? "bg-blue-600" : "bg-gray-300"
+            isFlexible ? "bg-primary" : "bg-border"
           }`}
         >
           <span
@@ -82,9 +82,9 @@ export function StaffSettings({ staffId, settings }: StaffSettingsProps) {
       {/* Flexibility percentage */}
       {isFlexible && (
         <div>
-          <label className="flex items-center justify-between text-sm font-medium text-gray-800 mb-2">
+          <label className="flex items-center justify-between text-sm font-medium text-foreground mb-2">
             <span>Taux de flexibilité</span>
-            <span className="text-blue-600 font-semibold">{flexPct}%</span>
+            <span className="text-primary font-semibold">{flexPct}%</span>
           </label>
           <input
             type="range"
@@ -93,9 +93,9 @@ export function StaffSettings({ staffId, settings }: StaffSettingsProps) {
             step={5}
             value={flexPct}
             onChange={(e) => setFlexPct(parseInt(e.target.value))}
-            className="w-full accent-blue-600"
+            className="w-full accent-primary"
           />
-          <div className="flex justify-between text-xs text-gray-400 mt-1">
+          <div className="flex justify-between text-xs text-muted-foreground mt-1">
             <span>0%</span>
             <span>50%</span>
             <span>100%</span>
@@ -106,15 +106,15 @@ export function StaffSettings({ staffId, settings }: StaffSettingsProps) {
       {/* Full day only */}
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-sm font-medium text-gray-800">Journée complète uniquement</p>
-          <p className="text-xs text-gray-500">
+          <p className="text-sm font-medium text-foreground">Journée complète uniquement</p>
+          <p className="text-xs text-muted-foreground">
             Ne peut pas être assignée demi-journée
           </p>
         </div>
         <button
           onClick={() => setFullDayOnly(!fullDayOnly)}
           className={`relative w-11 h-6 rounded-full transition-colors ${
-            fullDayOnly ? "bg-blue-600" : "bg-gray-300"
+            fullDayOnly ? "bg-primary" : "bg-border"
           }`}
         >
           <span
@@ -127,10 +127,10 @@ export function StaffSettings({ staffId, settings }: StaffSettingsProps) {
 
       {/* Admin target */}
       <div>
-        <label className="block text-sm font-medium text-gray-800 mb-1">
+        <label className="block text-sm font-medium text-foreground mb-1">
           Demi-journées admin par semaine
         </label>
-        <p className="text-xs text-gray-500 mb-2">
+        <p className="text-xs text-muted-foreground mb-2">
           Nombre cible de demi-journées administratives
         </p>
         <input
@@ -139,7 +139,7 @@ export function StaffSettings({ staffId, settings }: StaffSettingsProps) {
           max={10}
           value={adminTarget}
           onChange={(e) => setAdminTarget(parseInt(e.target.value) || 0)}
-          className="w-24 rounded-lg border border-gray-300 px-3 py-2 text-sm text-center"
+          className="w-24 rounded-xl border border-border/50 bg-card px-3 py-2 text-sm text-center focus:ring-2 focus:ring-ring outline-none"
         />
       </div>
 
@@ -148,7 +148,7 @@ export function StaffSettings({ staffId, settings }: StaffSettingsProps) {
         <button
           onClick={handleSave}
           disabled={update.isPending}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+          className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground text-sm rounded-xl hover:bg-primary-hover disabled:opacity-50 transition-colors shadow-md shadow-primary/20"
         >
           {update.isPending ? (
             <Loader2 className="w-4 h-4 animate-spin" />
@@ -158,7 +158,7 @@ export function StaffSettings({ staffId, settings }: StaffSettingsProps) {
           Enregistrer
         </button>
         {saved && (
-          <span className="text-sm text-green-600 font-medium">Sauvegardé !</span>
+          <span className="text-sm text-success font-medium">Sauvegardé !</span>
         )}
       </div>
     </div>

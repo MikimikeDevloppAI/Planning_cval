@@ -2,6 +2,13 @@
 
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { createClient } from "@/lib/supabase/client";
+import {
+  fetchSkills as fetchSkillsQuery,
+  updateSkill as updateSkillQuery,
+  deleteSkill as deleteSkillQuery,
+  createSkill as createSkillQuery,
+} from "@/lib/supabase/queries";
 import {
   Award,
   Plus,
@@ -25,24 +32,16 @@ export default function SkillsConfigPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [newName, setNewName] = useState("");
 
+  const supabase = createClient();
+
   const { data: skills, isLoading } = useQuery<Skill[]>({
     queryKey: ["config", "skills"],
-    queryFn: async () => {
-      const res = await fetch("/api/config/skills");
-      if (!res.ok) throw new Error("Erreur");
-      return res.json();
-    },
+    queryFn: () => fetchSkillsQuery(supabase) as Promise<Skill[]>,
   });
 
   const updateSkill = useMutation({
     mutationFn: async ({ id, name }: { id: number; name: string }) => {
-      const res = await fetch(`/api/config/skills/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name }),
-      });
-      if (!res.ok) throw new Error("Erreur");
-      return res.json();
+      return updateSkillQuery(supabase, id, { name });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["config", "skills"] });
@@ -52,11 +51,7 @@ export default function SkillsConfigPage() {
 
   const deleteSkill = useMutation({
     mutationFn: async (id: number) => {
-      const res = await fetch(`/api/config/skills/${id}`, {
-        method: "DELETE",
-      });
-      if (!res.ok) throw new Error("Erreur");
-      return res.json();
+      return deleteSkillQuery(supabase, id);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["config", "skills"] });
@@ -65,7 +60,7 @@ export default function SkillsConfigPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-20 text-gray-400">
+      <div className="flex items-center justify-center py-20 text-muted-foreground">
         <Loader2 className="w-6 h-6 animate-spin mr-2" />
         Chargement...
       </div>
@@ -73,17 +68,17 @@ export default function SkillsConfigPage() {
   }
 
   return (
-    <div>
+    <div className="h-full overflow-auto p-6">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-2">
           <Link
             href="/config"
-            className="text-sm text-gray-500 hover:text-gray-700"
+            className="text-sm text-muted-foreground hover:text-foreground"
           >
             Configuration
           </Link>
-          <span className="text-gray-300">/</span>
-          <h1 className="text-xl font-bold text-gray-900">Compétences</h1>
+          <span className="text-border">/</span>
+          <h1 className="text-xl font-bold text-foreground">Compétences</h1>
         </div>
         {!showAdd && (
           <button
@@ -91,7 +86,7 @@ export default function SkillsConfigPage() {
               setShowAdd(true);
               setNewName("");
             }}
-            className="flex items-center gap-1 px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            className="flex items-center gap-1 px-3 py-1.5 text-sm bg-primary text-primary-foreground rounded-xl hover:bg-primary-hover transition-colors"
           >
             <Plus className="w-4 h-4" />
             Ajouter
@@ -99,41 +94,33 @@ export default function SkillsConfigPage() {
         )}
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="divide-y divide-gray-100">
+      <div className="bg-card rounded-xl shadow-soft border border-border/50 overflow-hidden">
+        <div className="divide-y divide-border/20">
           {showAdd && (
-            <div className="flex items-center gap-3 px-4 py-3 bg-blue-50">
-              <Award className="w-4 h-4 text-blue-500" />
+            <div className="flex items-center gap-3 px-4 py-3 bg-primary/5">
+              <Award className="w-4 h-4 text-primary" />
               <input
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
                 placeholder="Nom de la compétence..."
-                className="flex-1 rounded border border-gray-300 px-2 py-1 text-sm"
+                className="flex-1 rounded-lg border border-border/50 bg-card px-2 py-1 text-sm focus:ring-2 focus:ring-ring outline-none"
                 autoFocus
               />
               <button
                 onClick={async () => {
                   if (!newName) return;
-                  const res = await fetch("/api/config/skills", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ name: newName }),
-                  });
-                  if (res.ok) {
-                    queryClient.invalidateQueries({
-                      queryKey: ["config", "skills"],
-                    });
-                    setShowAdd(false);
-                  }
+                  await createSkillQuery(supabase, newName);
+                  queryClient.invalidateQueries({ queryKey: ["config", "skills"] });
+                  setShowAdd(false);
                 }}
                 disabled={!newName}
-                className="text-green-600 p-1"
+                className="text-success p-1"
               >
                 <Check className="w-4 h-4" />
               </button>
               <button
                 onClick={() => setShowAdd(false)}
-                className="text-gray-400 p-1"
+                className="text-muted-foreground p-1"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -143,35 +130,35 @@ export default function SkillsConfigPage() {
           {(skills ?? []).map((skill) => (
             <div
               key={skill.id_skill}
-              className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50"
+              className="flex items-center gap-3 px-4 py-3 hover:bg-muted/30"
             >
-              <Award className="w-4 h-4 text-blue-500" />
+              <Award className="w-4 h-4 text-primary" />
               {editingId === skill.id_skill ? (
                 <div className="flex items-center gap-2 flex-1">
                   <input
                     value={editName}
                     onChange={(e) => setEditName(e.target.value)}
-                    className="flex-1 rounded border border-gray-300 px-2 py-1 text-sm"
+                    className="flex-1 rounded-lg border border-border/50 bg-card px-2 py-1 text-sm focus:ring-2 focus:ring-ring outline-none"
                     autoFocus
                   />
                   <button
                     onClick={() =>
                       updateSkill.mutate({ id: skill.id_skill, name: editName })
                     }
-                    className="text-green-600 p-1"
+                    className="text-success p-1"
                   >
                     <Check className="w-4 h-4" />
                   </button>
                   <button
                     onClick={() => setEditingId(null)}
-                    className="text-gray-400 p-1"
+                    className="text-muted-foreground p-1"
                   >
                     <X className="w-4 h-4" />
                   </button>
                 </div>
               ) : (
                 <>
-                  <span className="text-sm font-medium text-gray-800 flex-1">
+                  <span className="text-sm font-medium text-foreground flex-1">
                     {skill.name}
                   </span>
                   <button
@@ -179,13 +166,13 @@ export default function SkillsConfigPage() {
                       setEditingId(skill.id_skill);
                       setEditName(skill.name);
                     }}
-                    className="text-gray-400 hover:text-blue-600 p-1"
+                    className="text-muted-foreground hover:text-primary p-1"
                   >
                     <Pencil className="w-3.5 h-3.5" />
                   </button>
                   <button
                     onClick={() => deleteSkill.mutate(skill.id_skill)}
-                    className="text-gray-400 hover:text-red-600 p-1"
+                    className="text-muted-foreground hover:text-destructive p-1"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
@@ -195,7 +182,7 @@ export default function SkillsConfigPage() {
           ))}
 
           {(skills ?? []).length === 0 && !showAdd && (
-            <div className="text-center py-8 text-gray-400 text-sm">
+            <div className="text-center py-8 text-muted-foreground text-sm">
               Aucune compétence configurée
             </div>
           )}

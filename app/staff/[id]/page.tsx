@@ -40,7 +40,7 @@ export default function StaffDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-20 text-gray-400">
+      <div className="flex items-center justify-center py-20 text-muted-foreground">
         <Loader2 className="w-6 h-6 animate-spin mr-2" />
         Chargement du profil...
       </div>
@@ -49,7 +49,7 @@ export default function StaffDetailPage() {
 
   if (error || !data?.staff) {
     return (
-      <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700 text-sm">
+      <div className="bg-destructive/10 border border-destructive/30 rounded-xl p-4 text-destructive text-sm m-6">
         {error?.message ?? "Profil introuvable"}
       </div>
     );
@@ -65,12 +65,12 @@ export default function StaffDetailPage() {
       : TABS.filter((t) => t.id !== "settings");
 
   return (
-    <div>
+    <div className="h-full overflow-auto p-6">
       <StaffCard staff={staff} />
 
       {/* Tabs */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="border-b border-gray-200">
+      <div className="bg-card rounded-xl shadow-soft border border-border/50 overflow-hidden">
+        <div className="border-b border-border/30">
           <nav className="flex overflow-x-auto">
             {visibleTabs.map((tab) => {
               const Icon = tab.icon;
@@ -81,8 +81,8 @@ export default function StaffDetailPage() {
                   className={cn(
                     "flex items-center gap-1.5 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap",
                     activeTab === tab.id
-                      ? "border-blue-600 text-blue-600"
-                      : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                      ? "border-primary text-primary"
+                      : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"
                   )}
                 >
                   <Icon className="w-4 h-4" />

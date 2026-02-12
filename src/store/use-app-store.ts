@@ -1,12 +1,24 @@
 import { create } from "zustand";
-import { startOfISOWeek, addWeeks, subWeeks } from "date-fns";
+import { startOfISOWeek, addWeeks, subWeeks, startOfMonth, addMonths, subMonths } from "date-fns";
+
+type ViewMode = "departments" | "collaborateurs";
 
 interface AppState {
-  // Navigation semaine
+  // Navigation semaine (pour APIs existantes)
   weekStart: Date;
   setWeek: (d: Date) => void;
   nextWeek: () => void;
   prevWeek: () => void;
+
+  // Navigation mois (pour le dashboard)
+  currentMonth: Date;
+  setMonth: (d: Date) => void;
+  nextMonth: () => void;
+  prevMonth: () => void;
+
+  // View mode
+  viewMode: ViewMode;
+  setViewMode: (mode: ViewMode) => void;
 
   // Filtres
   filters: {
@@ -31,11 +43,21 @@ interface AppState {
 }
 
 export const useAppStore = create<AppState>((set) => ({
-  // Navigation
+  // Week navigation
   weekStart: startOfISOWeek(new Date()),
   setWeek: (d) => set({ weekStart: startOfISOWeek(d) }),
   nextWeek: () => set((s) => ({ weekStart: addWeeks(s.weekStart, 1) })),
   prevWeek: () => set((s) => ({ weekStart: subWeeks(s.weekStart, 1) })),
+
+  // Month navigation
+  currentMonth: startOfMonth(new Date()),
+  setMonth: (d) => set({ currentMonth: startOfMonth(d) }),
+  nextMonth: () => set((s) => ({ currentMonth: addMonths(s.currentMonth, 1) })),
+  prevMonth: () => set((s) => ({ currentMonth: subMonths(s.currentMonth, 1) })),
+
+  // View mode
+  viewMode: "departments",
+  setViewMode: (mode) => set({ viewMode: mode }),
 
   // Filtres
   filters: { siteIds: [], statusFilter: null, showGapsOnly: false },

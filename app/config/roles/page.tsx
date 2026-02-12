@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { createClient } from "@/lib/supabase/client";
+import { fetchRoles as fetchRolesQuery, updateRole as updateRoleQuery } from "@/lib/supabase/queries";
 import { Pencil, Check, X, Shield, Loader2 } from "lucide-react";
 import Link from "next/link";
 
@@ -17,30 +19,16 @@ export default function RolesConfigPage() {
   const [editName, setEditName] = useState("");
   const [editWeight, setEditWeight] = useState(0);
 
+  const supabase = createClient();
+
   const { data: roles, isLoading } = useQuery<Role[]>({
     queryKey: ["config", "roles"],
-    queryFn: async () => {
-      const res = await fetch("/api/config/roles");
-      if (!res.ok) throw new Error("Erreur");
-      return res.json();
-    },
+    queryFn: () => fetchRolesQuery(supabase) as Promise<Role[]>,
   });
 
   const updateRole = useMutation({
-    mutationFn: async ({
-      id,
-      data,
-    }: {
-      id: number;
-      data: Record<string, unknown>;
-    }) => {
-      const res = await fetch(`/api/config/roles/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-      if (!res.ok) throw new Error("Erreur");
-      return res.json();
+    mutationFn: async ({ id, data }: { id: number; data: Record<string, unknown> }) => {
+      return updateRoleQuery(supabase, id, data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["config", "roles"] });
@@ -50,7 +38,7 @@ export default function RolesConfigPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-20 text-gray-400">
+      <div className="flex items-center justify-center py-20 text-muted-foreground">
         <Loader2 className="w-6 h-6 animate-spin mr-2" />
         Chargement...
       </div>
@@ -58,40 +46,40 @@ export default function RolesConfigPage() {
   }
 
   return (
-    <div>
+    <div className="h-full overflow-auto p-6">
       <div className="flex items-center gap-2 mb-6">
         <Link
           href="/config"
-          className="text-sm text-gray-500 hover:text-gray-700"
+          className="text-sm text-muted-foreground hover:text-foreground"
         >
           Configuration
         </Link>
-        <span className="text-gray-300">/</span>
-        <h1 className="text-xl font-bold text-gray-900">Rôles Secrétaires</h1>
+        <span className="text-border">/</span>
+        <h1 className="text-xl font-bold text-foreground">Rôles Secrétaires</h1>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+      <div className="bg-card rounded-xl shadow-soft border border-border/50 overflow-hidden">
         <table className="w-full">
           <thead>
-            <tr className="bg-gray-50 border-b border-gray-200">
-              <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">
+            <tr className="bg-muted/50 border-b border-border/30">
+              <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase">
                 ID
               </th>
-              <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">
+              <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase">
                 Nom
               </th>
-              <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">
+              <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase">
                 Poids pénibilité
               </th>
-              <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase w-20">
+              <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase w-20">
                 Actions
               </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
+          <tbody className="divide-y divide-border/20">
             {(roles ?? []).map((role) => (
-              <tr key={role.id_role} className="hover:bg-gray-50">
-                <td className="px-4 py-3 text-sm text-gray-500">
+              <tr key={role.id_role} className="hover:bg-muted/30">
+                <td className="px-4 py-3 text-sm text-muted-foreground">
                   {role.id_role}
                 </td>
                 <td className="px-4 py-3">
@@ -99,13 +87,13 @@ export default function RolesConfigPage() {
                     <input
                       value={editName}
                       onChange={(e) => setEditName(e.target.value)}
-                      className="rounded border border-gray-300 px-2 py-1 text-sm w-48"
+                      className="rounded-lg border border-border/50 bg-card px-2 py-1 text-sm w-48 focus:ring-2 focus:ring-ring outline-none"
                       autoFocus
                     />
                   ) : (
                     <div className="flex items-center gap-2">
-                      <Shield className="w-4 h-4 text-blue-500" />
-                      <span className="text-sm font-medium text-gray-800">
+                      <Shield className="w-4 h-4 text-primary" />
+                      <span className="text-sm font-medium text-foreground">
                         {role.name}
                       </span>
                     </div>
@@ -121,7 +109,7 @@ export default function RolesConfigPage() {
                       onChange={(e) =>
                         setEditWeight(parseInt(e.target.value) || 0)
                       }
-                      className="rounded border border-gray-300 px-2 py-1 text-sm w-20"
+                      className="rounded-lg border border-border/50 bg-card px-2 py-1 text-sm w-20 focus:ring-2 focus:ring-ring outline-none"
                     />
                   ) : (
                     <div className="flex items-center gap-1">
@@ -129,12 +117,12 @@ export default function RolesConfigPage() {
                         (_, i) => (
                           <div
                             key={i}
-                            className="w-2 h-2 rounded-full bg-red-400"
+                            className="w-2 h-2 rounded-full bg-destructive/60"
                           />
                         )
                       )}
                       {role.hardship_weight === 0 && (
-                        <span className="text-xs text-gray-400">0</span>
+                        <span className="text-xs text-muted-foreground">0</span>
                       )}
                     </div>
                   )}
@@ -152,13 +140,13 @@ export default function RolesConfigPage() {
                             },
                           })
                         }
-                        className="text-green-600 p-1"
+                        className="text-success p-1"
                       >
                         <Check className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => setEditingId(null)}
-                        className="text-gray-400 p-1"
+                        className="text-muted-foreground p-1"
                       >
                         <X className="w-4 h-4" />
                       </button>
@@ -170,7 +158,7 @@ export default function RolesConfigPage() {
                         setEditName(role.name);
                         setEditWeight(role.hardship_weight);
                       }}
-                      className="text-gray-400 hover:text-blue-600 p-1"
+                      className="text-muted-foreground hover:text-primary p-1"
                     >
                       <Pencil className="w-3.5 h-3.5" />
                     </button>

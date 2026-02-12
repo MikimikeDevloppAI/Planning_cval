@@ -99,7 +99,7 @@ export function StaffContextMenu({
           {
             label: "Annuler assignation",
             icon: XCircle,
-            className: "text-red-600 hover:bg-red-50",
+            className: "text-destructive hover:bg-destructive/5",
             onClick: () => {
               cancelAssignment.mutate({
                 assignmentId: assignment.id_assignment,
@@ -121,9 +121,9 @@ export function StaffContextMenu({
 
   return (
     <div ref={ref} style={style} className="min-w-[180px]">
-      <div className="bg-white rounded-lg shadow-xl border border-gray-200 py-1 overflow-hidden">
-        <div className="px-3 py-1.5 border-b border-gray-100">
-          <p className="text-xs font-semibold text-gray-500 truncate">
+      <div className="bg-card rounded-xl shadow-xl border border-border/50 py-1 overflow-hidden">
+        <div className="px-3 py-1.5 border-b border-border/30">
+          <p className="text-xs font-semibold text-muted-foreground truncate">
             {assignment.firstname} {assignment.lastname}
           </p>
         </div>
@@ -135,7 +135,7 @@ export function StaffContextMenu({
               onClick={item.onClick}
               className={`flex items-center gap-2 w-full text-left px-3 py-2 text-sm transition-colors ${
                 (item as Record<string, unknown>).className ??
-                "text-gray-700 hover:bg-gray-50"
+                "text-foreground hover:bg-muted/50"
               }`}
             >
               <Icon className="w-4 h-4" />

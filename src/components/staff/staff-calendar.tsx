@@ -85,11 +85,11 @@ export function StaffCalendar({ assignments, leaves }: StaffCalendarProps) {
   }, [leaves]);
 
   const getRoleColor = (roleId: number | null, type: string) => {
-    if (type === "DOCTOR") return "bg-blue-400";
-    if (roleId === 1) return "bg-green-400";
-    if (roleId === 2) return "bg-pink-400";
-    if (roleId === 3) return "bg-orange-400";
-    return "bg-gray-400";
+    if (type === "DOCTOR") return "bg-[#aecbfa]";
+    if (roleId === 1) return "bg-[#a8dab5]";
+    if (roleId === 2) return "bg-[#f5a3ab]";
+    if (roleId === 3) return "bg-[#f9cb80]";
+    return "bg-muted-foreground/30";
   };
 
   const today = new Date();
@@ -100,18 +100,18 @@ export function StaffCalendar({ assignments, leaves }: StaffCalendarProps) {
       <div className="flex items-center justify-between mb-4">
         <button
           onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
-          className="p-1 rounded-lg hover:bg-gray-100"
+          className="p-1 rounded-lg hover:bg-muted/50 transition-colors"
         >
-          <ChevronLeft className="w-5 h-5 text-gray-600" />
+          <ChevronLeft className="w-5 h-5 text-muted-foreground" />
         </button>
-        <h4 className="text-sm font-semibold text-gray-800 capitalize">
+        <h4 className="text-sm font-semibold text-foreground capitalize">
           {format(currentMonth, "MMMM yyyy", { locale: fr })}
         </h4>
         <button
           onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
-          className="p-1 rounded-lg hover:bg-gray-100"
+          className="p-1 rounded-lg hover:bg-muted/50 transition-colors"
         >
-          <ChevronRight className="w-5 h-5 text-gray-600" />
+          <ChevronRight className="w-5 h-5 text-muted-foreground" />
         </button>
       </div>
 
@@ -120,7 +120,7 @@ export function StaffCalendar({ assignments, leaves }: StaffCalendarProps) {
         {["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"].map((d) => (
           <div
             key={d}
-            className="text-center text-xs font-medium text-gray-500 py-1"
+            className="text-center text-xs font-medium text-muted-foreground py-1"
           >
             {d}
           </div>
@@ -128,7 +128,7 @@ export function StaffCalendar({ assignments, leaves }: StaffCalendarProps) {
       </div>
 
       {/* Calendar grid */}
-      <div className="grid grid-cols-7 gap-px bg-gray-200 rounded-lg overflow-hidden">
+      <div className="grid grid-cols-7 gap-px bg-border/30 rounded-xl overflow-hidden">
         {days.map((day) => {
           const dateStr = format(day, "yyyy-MM-dd");
           const isCurrentMonth = isSameMonth(day, currentMonth);
@@ -140,16 +140,16 @@ export function StaffCalendar({ assignments, leaves }: StaffCalendarProps) {
             <div
               key={dateStr}
               className={cn(
-                "bg-white min-h-[60px] p-1",
-                !isCurrentMonth && "bg-gray-50"
+                "bg-card min-h-[60px] p-1",
+                !isCurrentMonth && "bg-muted/30"
               )}
             >
               <div
                 className={cn(
                   "text-xs font-medium mb-0.5 text-right",
-                  isCurrentMonth ? "text-gray-700" : "text-gray-300",
+                  isCurrentMonth ? "text-foreground" : "text-border",
                   isToday &&
-                    "bg-blue-600 text-white w-5 h-5 rounded-full flex items-center justify-center ml-auto"
+                    "bg-primary text-primary-foreground w-5 h-5 rounded-full flex items-center justify-center ml-auto"
                 )}
               >
                 {format(day, "d")}
@@ -160,9 +160,9 @@ export function StaffCalendar({ assignments, leaves }: StaffCalendarProps) {
                 {/* AM */}
                 {(dayAssignments?.am.length || dayLeaves?.am) && (
                   <div className="flex items-center gap-0.5">
-                    <span className="text-[8px] text-gray-400 w-3">AM</span>
+                    <span className="text-[8px] text-muted-foreground w-3">AM</span>
                     {dayLeaves?.am ? (
-                      <div className="flex-1 h-3 bg-red-100 rounded-sm border border-red-200" />
+                      <div className="flex-1 h-3 bg-destructive/10 rounded-sm border border-destructive/20" />
                     ) : (
                       <div className="flex gap-0.5 flex-1">
                         {dayAssignments?.am.map((a) => (
@@ -182,9 +182,9 @@ export function StaffCalendar({ assignments, leaves }: StaffCalendarProps) {
                 {/* PM */}
                 {(dayAssignments?.pm.length || dayLeaves?.pm) && (
                   <div className="flex items-center gap-0.5">
-                    <span className="text-[8px] text-gray-400 w-3">PM</span>
+                    <span className="text-[8px] text-muted-foreground w-3">PM</span>
                     {dayLeaves?.pm ? (
-                      <div className="flex-1 h-3 bg-red-100 rounded-sm border border-red-200" />
+                      <div className="flex-1 h-3 bg-destructive/10 rounded-sm border border-destructive/20" />
                     ) : (
                       <div className="flex gap-0.5 flex-1">
                         {dayAssignments?.pm.map((a) => (
@@ -208,25 +208,25 @@ export function StaffCalendar({ assignments, leaves }: StaffCalendarProps) {
       </div>
 
       {/* Legend */}
-      <div className="flex flex-wrap items-center gap-3 mt-3 text-xs text-gray-500">
+      <div className="flex flex-wrap items-center gap-3 mt-3 text-xs text-muted-foreground">
         <div className="flex items-center gap-1">
-          <div className="w-3 h-3 rounded-sm bg-blue-400" />
+          <div className="w-3 h-3 rounded-sm bg-[#aecbfa]" />
           Médecin
         </div>
         <div className="flex items-center gap-1">
-          <div className="w-3 h-3 rounded-sm bg-green-400" />
+          <div className="w-3 h-3 rounded-sm bg-[#a8dab5]" />
           Standard
         </div>
         <div className="flex items-center gap-1">
-          <div className="w-3 h-3 rounded-sm bg-pink-400" />
+          <div className="w-3 h-3 rounded-sm bg-[#f5a3ab]" />
           Fermeture
         </div>
         <div className="flex items-center gap-1">
-          <div className="w-3 h-3 rounded-sm bg-orange-400" />
+          <div className="w-3 h-3 rounded-sm bg-[#f9cb80]" />
           Aide ferm.
         </div>
         <div className="flex items-center gap-1">
-          <div className="w-3 h-3 rounded-sm bg-red-100 border border-red-200" />
+          <div className="w-3 h-3 rounded-sm bg-destructive/10 border border-destructive/20" />
           Absence
         </div>
       </div>

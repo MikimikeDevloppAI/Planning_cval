@@ -213,6 +213,8 @@ export interface PlanningAssignment {
 export interface PlanningBlock {
   id_block: number;
   block_type: BlockType;
+  id_activity: number | null;
+  activity_name: string | null;
   assignments: PlanningAssignment[];
 }
 

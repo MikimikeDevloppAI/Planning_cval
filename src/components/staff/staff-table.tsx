@@ -69,11 +69,11 @@ export function StaffTable() {
   };
 
   const SortIcon = ({ col }: { col: SortKey }) => {
-    if (sort.key !== col) return <ChevronUp className="w-3 h-3 text-gray-300" />;
+    if (sort.key !== col) return <ChevronUp className="w-3 h-3 text-border" />;
     return sort.dir === "asc" ? (
-      <ChevronUp className="w-3 h-3 text-blue-600" />
+      <ChevronUp className="w-3 h-3 text-primary" />
     ) : (
-      <ChevronDown className="w-3 h-3 text-blue-600" />
+      <ChevronDown className="w-3 h-3 text-primary" />
     );
   };
 
@@ -82,22 +82,22 @@ export function StaffTable() {
       {/* Filters bar */}
       <div className="flex flex-wrap items-center gap-3 mb-4">
         <div className="relative flex-1 min-w-[200px] max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <input
             type="text"
             placeholder="Rechercher par nom..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+            className="w-full pl-9 pr-3 py-2 text-sm rounded-xl border border-border/50 bg-card focus:ring-2 focus:ring-ring focus:border-ring outline-none transition-all"
           />
         </div>
 
         <div className="flex items-center gap-2">
-          <Filter className="w-4 h-4 text-gray-400" />
+          <Filter className="w-4 h-4 text-muted-foreground" />
           <select
             value={posFilter}
             onChange={(e) => setPosFilter(e.target.value ? parseInt(e.target.value) : "")}
-            className="text-sm rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none"
+            className="text-sm rounded-xl border border-border/50 bg-card px-3 py-2 focus:ring-2 focus:ring-ring outline-none"
           >
             <option value="">Toutes positions</option>
             {Object.entries(POSITION_LABELS).map(([id, label]) => (
@@ -110,7 +110,7 @@ export function StaffTable() {
           <select
             value={activeFilter}
             onChange={(e) => setActiveFilter(e.target.value)}
-            className="text-sm rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none"
+            className="text-sm rounded-xl border border-border/50 bg-card px-3 py-2 focus:ring-2 focus:ring-ring outline-none"
           >
             <option value="true">Actifs</option>
             <option value="false">Inactifs</option>
@@ -118,14 +118,14 @@ export function StaffTable() {
           </select>
         </div>
 
-        <div className="text-sm text-gray-500">
+        <div className="text-sm text-muted-foreground">
           {filtered.length} résultat{filtered.length !== 1 ? "s" : ""}
         </div>
       </div>
 
       {/* Loading */}
       {isLoading && (
-        <div className="flex items-center justify-center py-16 text-gray-400">
+        <div className="flex items-center justify-center py-16 text-muted-foreground">
           <Loader2 className="w-6 h-6 animate-spin mr-2" />
           Chargement...
         </div>
@@ -133,20 +133,20 @@ export function StaffTable() {
 
       {/* Error */}
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700 text-sm">
+        <div className="bg-destructive/10 border border-destructive/30 rounded-xl p-4 text-destructive text-sm">
           {error.message}
         </div>
       )}
 
       {/* Table */}
       {!isLoading && !error && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="bg-card rounded-xl shadow-soft border border-border/50 overflow-hidden">
           <table className="w-full">
             <thead>
-              <tr className="bg-gray-50 border-b border-gray-200">
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider w-12" />
+              <tr className="bg-muted/50 border-b border-border/30">
+                <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider w-12" />
                 <th
-                  className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer select-none"
+                  className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider cursor-pointer select-none"
                   onClick={() => toggleSort("lastname")}
                 >
                   <div className="flex items-center gap-1">
@@ -154,18 +154,18 @@ export function StaffTable() {
                   </div>
                 </th>
                 <th
-                  className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer select-none"
+                  className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider cursor-pointer select-none"
                   onClick={() => toggleSort("position")}
                 >
                   <div className="flex items-center gap-1">
                     Position <SortIcon col="position" />
                   </div>
                 </th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                   Paramètres
                 </th>
                 <th
-                  className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer select-none"
+                  className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider cursor-pointer select-none"
                   onClick={() => toggleSort("is_active")}
                 >
                   <div className="flex items-center gap-1">
@@ -174,7 +174,7 @@ export function StaffTable() {
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-border/20">
               {filtered.map((staff: Record<string, unknown>) => {
                 const positionName =
                   (staff.positions as { name: string } | null)?.name ?? "—";
@@ -186,20 +186,20 @@ export function StaffTable() {
 
                 const posColor =
                   staff.id_primary_position === 1
-                    ? "bg-blue-500"
+                    ? "bg-[#e8f0fe] text-[#1a56db]"
                     : staff.id_primary_position === 2
-                    ? "bg-green-500"
-                    : "bg-purple-500";
+                    ? "bg-[#e6f4ea] text-[#1e7e34]"
+                    : "bg-[#f3e8fd] text-[#6a1b9a]";
 
                 return (
                   <tr
                     key={staff.id_staff as number}
-                    className="hover:bg-gray-50 cursor-pointer transition-colors"
+                    className="hover:bg-muted/30 cursor-pointer transition-colors"
                     onClick={() => router.push(`/staff/${staff.id_staff}`)}
                   >
                     <td className="px-4 py-3">
                       <div
-                        className={`w-9 h-9 rounded-full ${posColor} flex items-center justify-center text-white text-xs font-bold`}
+                        className={`w-9 h-9 rounded-full ${posColor} flex items-center justify-center text-xs font-bold`}
                       >
                         {getInitials(
                           staff.firstname as string,
@@ -208,7 +208,7 @@ export function StaffTable() {
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <div className="font-medium text-gray-900 text-sm">
+                      <div className="font-medium text-foreground text-sm">
                         {staff.lastname as string} {staff.firstname as string}
                       </div>
                     </td>
@@ -216,45 +216,45 @@ export function StaffTable() {
                       <span
                         className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                           staff.id_primary_position === 1
-                            ? "bg-blue-50 text-blue-700"
+                            ? "bg-[#e8f0fe] text-[#1a56db]"
                             : staff.id_primary_position === 2
-                            ? "bg-green-50 text-green-700"
-                            : "bg-purple-50 text-purple-700"
+                            ? "bg-[#e6f4ea] text-[#1e7e34]"
+                            : "bg-[#f3e8fd] text-[#6a1b9a]"
                         }`}
                       >
                         {positionName}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-500">
+                    <td className="px-4 py-3 text-sm text-muted-foreground">
                       {(staff.id_primary_position as number) === 2 && settings ? (
                         <div className="flex items-center gap-2 text-xs">
                           {settings.is_flexible && (
-                            <span className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-700">
+                            <span className="px-1.5 py-0.5 rounded bg-warning/10 text-warning">
                               Flexible
                             </span>
                           )}
                           {settings.full_day_only && (
-                            <span className="px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700">
+                            <span className="px-1.5 py-0.5 rounded bg-primary/10 text-primary">
                               JC uniquement
                             </span>
                           )}
                           {(settings.admin_target ?? 0) > 0 && (
-                            <span className="px-1.5 py-0.5 rounded bg-purple-50 text-purple-700">
+                            <span className="px-1.5 py-0.5 rounded bg-[#f3e8fd] text-[#6a1b9a]">
                               Admin: {settings.admin_target}
                             </span>
                           )}
                         </div>
                       ) : (
-                        <span className="text-gray-300">—</span>
+                        <span className="text-border">—</span>
                       )}
                     </td>
                     <td className="px-4 py-3">
                       {staff.is_active ? (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-success/10 text-success">
                           Actif
                         </span>
                       ) : (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-muted text-muted-foreground">
                           Inactif
                         </span>
                       )}
@@ -264,7 +264,7 @@ export function StaffTable() {
               })}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-4 py-12 text-center text-gray-400">
+                  <td colSpan={5} className="px-4 py-12 text-center text-muted-foreground">
                     <UserCircle2 className="w-8 h-8 mx-auto mb-2" />
                     Aucun résultat
                   </td>

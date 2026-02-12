@@ -3,6 +3,12 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAppStore } from "@/store/use-app-store";
 import { toISODate } from "@/lib/utils/dates";
+import { createClient } from "@/lib/supabase/client";
+import {
+  moveAssignment as moveAssignmentQuery,
+  cancelAssignment as cancelAssignmentQuery,
+  updateAssignmentStatus as updateAssignmentStatusQuery,
+} from "@/lib/supabase/queries";
 
 interface MoveAssignmentParams {
   oldAssignmentId: number;
@@ -22,62 +28,21 @@ interface UpdateStatusParams {
   status: "PROPOSED" | "CONFIRMED" | "PUBLISHED" | "CANCELLED";
 }
 
-async function moveAssignment(params: MoveAssignmentParams) {
-  const res = await fetch("/api/assignments", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      action: "move",
-      oldAssignmentId: params.oldAssignmentId,
-      targetBlockId: params.targetBlockId,
-      staffId: params.staffId,
-      assignmentType: params.assignmentType,
-      roleId: params.roleId,
-      skillId: params.skillId,
-    }),
-  });
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error ?? "Failed to move assignment");
-  }
-  return res.json();
-}
-
-async function cancelAssignment(params: CancelAssignmentParams) {
-  const res = await fetch("/api/assignments", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      action: "cancel",
-      oldAssignmentId: params.assignmentId,
-    }),
-  });
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error ?? "Failed to cancel assignment");
-  }
-  return res.json();
-}
-
-async function updateAssignmentStatus(params: UpdateStatusParams) {
-  const res = await fetch("/api/assignments", {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(params),
-  });
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error ?? "Failed to update assignment");
-  }
-  return res.json();
-}
-
 export function useMoveAssignment() {
   const queryClient = useQueryClient();
   const weekStart = useAppStore((s) => s.weekStart);
+  const supabase = createClient();
 
   return useMutation({
-    mutationFn: moveAssignment,
+    mutationFn: (params: MoveAssignmentParams) =>
+      moveAssignmentQuery(supabase, {
+        oldAssignmentId: params.oldAssignmentId,
+        targetBlockId: params.targetBlockId,
+        staffId: params.staffId,
+        assignmentType: params.assignmentType,
+        roleId: params.roleId,
+        skillId: params.skillId,
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: ["planning", toISODate(weekStart)],
@@ -89,9 +54,11 @@ export function useMoveAssignment() {
 export function useCancelAssignment() {
   const queryClient = useQueryClient();
   const weekStart = useAppStore((s) => s.weekStart);
+  const supabase = createClient();
 
   return useMutation({
-    mutationFn: cancelAssignment,
+    mutationFn: (params: CancelAssignmentParams) =>
+      cancelAssignmentQuery(supabase, params.assignmentId),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: ["planning", toISODate(weekStart)],
@@ -103,9 +70,11 @@ export function useCancelAssignment() {
 export function useUpdateAssignmentStatus() {
   const queryClient = useQueryClient();
   const weekStart = useAppStore((s) => s.weekStart);
+  const supabase = createClient();
 
   return useMutation({
-    mutationFn: updateAssignmentStatus,
+    mutationFn: (params: UpdateStatusParams) =>
+      updateAssignmentStatusQuery(supabase, params.id_assignment, params.status),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: ["planning", toISODate(weekStart)],

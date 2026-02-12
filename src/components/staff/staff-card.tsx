@@ -26,10 +26,10 @@ export function StaffCard({ staff }: StaffCardProps) {
 
   const posColor =
     staff.id_primary_position === 1
-      ? "bg-blue-500"
+      ? "bg-[#e8f0fe] text-[#1a56db]"
       : staff.id_primary_position === 2
-      ? "bg-green-500"
-      : "bg-purple-500";
+      ? "bg-[#e6f4ea] text-[#1e7e34]"
+      : "bg-[#f3e8fd] text-[#6a1b9a]";
 
   const handleSave = () => {
     updateStaff.mutate(
@@ -39,17 +39,17 @@ export function StaffCard({ staff }: StaffCardProps) {
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+    <div className="bg-card rounded-xl shadow-soft border border-border/50 p-6 mb-6">
       <div className="flex items-center gap-4">
         <Link
           href="/staff"
-          className="text-gray-400 hover:text-gray-600 transition-colors"
+          className="text-muted-foreground hover:text-foreground transition-colors"
         >
           <ArrowLeft className="w-5 h-5" />
         </Link>
 
         <div
-          className={`w-14 h-14 rounded-full ${posColor} flex items-center justify-center text-white text-lg font-bold shrink-0`}
+          className={`w-14 h-14 rounded-full ${posColor} flex items-center justify-center text-lg font-bold shrink-0`}
         >
           {getInitials(staff.firstname, staff.lastname)}
         </div>
@@ -60,19 +60,19 @@ export function StaffCard({ staff }: StaffCardProps) {
               <input
                 value={firstname}
                 onChange={(e) => setFirstname(e.target.value)}
-                className="text-lg font-semibold text-gray-900 border border-gray-300 rounded px-2 py-1 w-40"
+                className="text-lg font-semibold text-foreground border border-border/50 rounded-lg px-2 py-1 w-40 bg-card focus:ring-2 focus:ring-ring outline-none"
                 placeholder="Prénom"
               />
               <input
                 value={lastname}
                 onChange={(e) => setLastname(e.target.value)}
-                className="text-lg font-semibold text-gray-900 border border-gray-300 rounded px-2 py-1 w-40"
+                className="text-lg font-semibold text-foreground border border-border/50 rounded-lg px-2 py-1 w-40 bg-card focus:ring-2 focus:ring-ring outline-none"
                 placeholder="Nom"
               />
               <button
                 onClick={handleSave}
                 disabled={updateStaff.isPending}
-                className="p-1 text-green-600 hover:bg-green-50 rounded"
+                className="p-1 text-success hover:bg-success/10 rounded-lg"
               >
                 <Check className="w-4 h-4" />
               </button>
@@ -82,14 +82,14 @@ export function StaffCard({ staff }: StaffCardProps) {
                   setLastname(staff.lastname);
                   setEditing(false);
                 }}
-                className="p-1 text-gray-400 hover:bg-gray-50 rounded"
+                className="p-1 text-muted-foreground hover:bg-muted rounded-lg"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
           ) : (
             <h2
-              className="text-xl font-semibold text-gray-900 cursor-pointer hover:text-blue-600 transition-colors"
+              className="text-xl font-semibold text-foreground cursor-pointer hover:text-primary transition-colors"
               onClick={() => setEditing(true)}
               title="Cliquer pour modifier"
             >
@@ -100,10 +100,10 @@ export function StaffCard({ staff }: StaffCardProps) {
             <span
               className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                 staff.id_primary_position === 1
-                  ? "bg-blue-50 text-blue-700"
+                  ? "bg-[#e8f0fe] text-[#1a56db]"
                   : staff.id_primary_position === 2
-                  ? "bg-green-50 text-green-700"
-                  : "bg-purple-50 text-purple-700"
+                  ? "bg-[#e6f4ea] text-[#1e7e34]"
+                  : "bg-[#f3e8fd] text-[#6a1b9a]"
               }`}
             >
               {staff.positions?.name ??
@@ -111,11 +111,11 @@ export function StaffCard({ staff }: StaffCardProps) {
                 "—"}
             </span>
             {staff.is_active ? (
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700">
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-success/10 text-success">
                 Actif
               </span>
             ) : (
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-muted text-muted-foreground">
                 Inactif
               </span>
             )}
@@ -129,10 +129,10 @@ export function StaffCard({ staff }: StaffCardProps) {
               data: { is_active: !staff.is_active },
             })
           }
-          className={`text-sm px-3 py-1.5 rounded-lg border transition-colors ${
+          className={`text-sm px-3 py-1.5 rounded-xl border transition-all duration-200 ${
             staff.is_active
-              ? "border-red-200 text-red-600 hover:bg-red-50"
-              : "border-green-200 text-green-600 hover:bg-green-50"
+              ? "border-destructive/30 text-destructive hover:bg-destructive/5"
+              : "border-success/30 text-success hover:bg-success/5"
           }`}
         >
           {staff.is_active ? "Désactiver" : "Activer"}

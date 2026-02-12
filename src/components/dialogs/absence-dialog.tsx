@@ -5,6 +5,8 @@ import { useAppStore } from "@/store/use-app-store";
 import { useQueryClient } from "@tanstack/react-query";
 import { toISODate } from "@/lib/utils/dates";
 import { X } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
+import { fetchStaffList, addStaffLeave } from "@/lib/supabase/queries";
 
 interface StaffOption {
   id_staff: number;
@@ -26,11 +28,12 @@ export function AbsenceDialog() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<string | null>(null);
 
+  const supabase = createClient();
+
   useEffect(() => {
     if (open) {
-      fetch("/api/staff?active=true")
-        .then((r) => r.json())
-        .then((data) => setStaffList(Array.isArray(data) ? data : []));
+      fetchStaffList(supabase, { active: "true" })
+        .then((data) => setStaffList(Array.isArray(data) ? data as StaffOption[] : []));
 
       if (staffId) setSelectedStaffId(staffId);
       setResult(null);
@@ -46,19 +49,11 @@ export function AbsenceDialog() {
     setResult(null);
 
     try {
-      const res = await fetch(`/api/staff/${selectedStaffId}/leaves`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          start_date: startDate,
-          end_date: endDate,
-          period: period || null,
-        }),
+      const data = await addStaffLeave(supabase, selectedStaffId as number, {
+        start_date: startDate,
+        end_date: endDate,
+        period: period || null,
       });
-
-      const data = await res.json();
-
-      if (!res.ok) throw new Error(data.error);
 
       setResult(
         `Absence enregistrée. ${data.invalidated} assignation(s) invalidée(s), ${data.issues} alerte(s) créée(s).`
@@ -75,13 +70,13 @@ export function AbsenceDialog() {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+      <div className="bg-card rounded-xl shadow-xl w-full max-w-md p-6 border border-border/50">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-gray-800">
+          <h3 className="text-lg font-semibold text-foreground">
             Déclarer une absence
           </h3>
-          <button onClick={close} className="text-gray-400 hover:text-gray-600">
+          <button onClick={close} className="text-muted-foreground hover:text-foreground transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -89,11 +84,11 @@ export function AbsenceDialog() {
         <div className="space-y-4">
           {/* Staff selector */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-foreground mb-1">
               Personnel
             </label>
             <select
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              className="w-full rounded-xl border border-border/50 bg-card px-3 py-2 text-sm focus:ring-2 focus:ring-ring outline-none"
               value={selectedStaffId}
               onChange={(e) => setSelectedStaffId(e.target.value ? parseInt(e.target.value) : "")}
             >
@@ -109,12 +104,12 @@ export function AbsenceDialog() {
           {/* Date range */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-foreground mb-1">
                 Date début
               </label>
               <input
                 type="date"
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                className="w-full rounded-xl border border-border/50 bg-card px-3 py-2 text-sm focus:ring-2 focus:ring-ring outline-none"
                 value={startDate}
                 onChange={(e) => {
                   setStartDate(e.target.value);
@@ -123,12 +118,12 @@ export function AbsenceDialog() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-foreground mb-1">
                 Date fin
               </label>
               <input
                 type="date"
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                className="w-full rounded-xl border border-border/50 bg-card px-3 py-2 text-sm focus:ring-2 focus:ring-ring outline-none"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
               />
@@ -137,11 +132,11 @@ export function AbsenceDialog() {
 
           {/* Period */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-foreground mb-1">
               Période
             </label>
             <select
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              className="w-full rounded-xl border border-border/50 bg-card px-3 py-2 text-sm focus:ring-2 focus:ring-ring outline-none"
               value={period}
               onChange={(e) => setPeriod(e.target.value as "AM" | "PM" | "")}
             >
@@ -153,10 +148,10 @@ export function AbsenceDialog() {
 
           {result && (
             <div
-              className={`text-sm p-3 rounded-md ${
+              className={`text-sm p-3 rounded-xl ${
                 result.startsWith("Erreur")
-                  ? "bg-red-50 text-red-700"
-                  : "bg-green-50 text-green-700"
+                  ? "bg-destructive/10 text-destructive"
+                  : "bg-success/10 text-success"
               }`}
             >
               {result}
@@ -166,7 +161,7 @@ export function AbsenceDialog() {
           <div className="flex gap-2 justify-end pt-2">
             <button
               onClick={close}
-              className="px-4 py-2 text-sm rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
+              className="px-4 py-2 text-sm rounded-xl border border-border/50 text-foreground hover:bg-muted/50 transition-colors"
             >
               {result ? "Fermer" : "Annuler"}
             </button>
@@ -174,7 +169,7 @@ export function AbsenceDialog() {
               <button
                 onClick={handleSubmit}
                 disabled={!selectedStaffId || !startDate || !endDate || loading}
-                className="px-4 py-2 text-sm rounded-md bg-orange-600 text-white hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-4 py-2 text-sm rounded-xl bg-warning text-white hover:bg-warning/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {loading ? "En cours..." : "Confirmer"}
               </button>

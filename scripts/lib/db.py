@@ -184,11 +184,11 @@ def load_admin_blocks(conn, week_start: date):
 
 
 def clear_proposed(conn, week_start: date):
-    """Delete existing PROPOSED ALGORITHM secretary assignments for the week."""
+    """Invalidate existing PROPOSED ALGORITHM secretary assignments for the week."""
     week_end = week_start + timedelta(days=6)
     cur = conn.cursor()
     cur.execute(
-        """DELETE FROM assignments
+        """UPDATE assignments SET status = 'INVALIDATED'
            WHERE assignment_type = 'SECRETARY'
              AND source = 'ALGORITHM'
              AND status = 'PROPOSED'
@@ -197,9 +197,9 @@ def clear_proposed(conn, week_start: date):
              )""",
         (week_start, week_end),
     )
-    deleted = cur.rowcount
+    cleared = cur.rowcount
     conn.commit()
-    return deleted
+    return cleared
 
 
 def write_assignments(conn, assignments):
@@ -212,12 +212,16 @@ def write_assignments(conn, assignments):
     params = []
     for i, a in enumerate(assignments):
         values.append("(%s, %s, 'SECRETARY', %s, %s, 'ALGORITHM', 'PROPOSED')")
-        params.extend([a["id_block"], a["id_staff"], a["id_role"], a.get("id_skill")])
+        # chk_secretary requires id_role NOT NULL for SECRETARY type; default to 1 (Standard)
+        role_id = a["id_role"] if a["id_role"] is not None else 1
+        params.extend([a["id_block"], a["id_staff"], role_id, a.get("id_skill")])
 
     sql = (
         "INSERT INTO assignments (id_block, id_staff, assignment_type, id_role, id_skill, source, status) "
         "VALUES " + ", ".join(values) + " "
-        "ON CONFLICT (id_block, id_staff) DO NOTHING"
+        "ON CONFLICT (id_block, id_staff) DO UPDATE SET "
+        "id_role = EXCLUDED.id_role, id_skill = EXCLUDED.id_skill, "
+        "source = EXCLUDED.source, status = EXCLUDED.status"
     )
     cur.execute(sql, params)
     inserted = cur.rowcount

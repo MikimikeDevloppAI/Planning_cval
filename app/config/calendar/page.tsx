@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { createClient } from "@/lib/supabase/client";
+import { fetchHolidays, updateCalendarDay } from "@/lib/supabase/queries";
 import {
   CalendarDays,
   ChevronLeft,
@@ -33,13 +35,11 @@ export default function CalendarConfigPage() {
   const [newName, setNewName] = useState("");
   const [showAdd, setShowAdd] = useState(false);
 
+  const supabase = createClient();
+
   const { data: holidays, isLoading } = useQuery<HolidayEntry[]>({
     queryKey: ["config", "calendar", year],
-    queryFn: async () => {
-      const res = await fetch(`/api/config/calendar?year=${year}`);
-      if (!res.ok) throw new Error("Erreur");
-      return res.json();
-    },
+    queryFn: () => fetchHolidays(supabase, year) as Promise<HolidayEntry[]>,
   });
 
   const updateHoliday = useMutation({
@@ -52,13 +52,7 @@ export default function CalendarConfigPage() {
       is_holiday: boolean;
       holiday_name: string | null;
     }) => {
-      const res = await fetch("/api/config/calendar", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date, is_holiday, holiday_name }),
-      });
-      if (!res.ok) throw new Error("Erreur");
-      return res.json();
+      return updateCalendarDay(supabase, date, { is_holiday, holiday_name });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["config", "calendar", year] });
@@ -99,7 +93,7 @@ export default function CalendarConfigPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-20 text-gray-400">
+      <div className="flex items-center justify-center py-20 text-muted-foreground">
         <Loader2 className="w-6 h-6 animate-spin mr-2" />
         Chargement...
       </div>
@@ -107,66 +101,66 @@ export default function CalendarConfigPage() {
   }
 
   return (
-    <div>
+    <div className="h-full overflow-auto p-6">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-2">
           <Link
             href="/config"
-            className="text-sm text-gray-500 hover:text-gray-700"
+            className="text-sm text-muted-foreground hover:text-foreground"
           >
             Configuration
           </Link>
-          <span className="text-gray-300">/</span>
-          <h1 className="text-xl font-bold text-gray-900">Calendrier</h1>
+          <span className="text-border">/</span>
+          <h1 className="text-xl font-bold text-foreground">Calendrier</h1>
         </div>
 
         <div className="flex items-center gap-2">
           <button
             onClick={() => setYear(year - 1)}
-            className="p-1 rounded hover:bg-gray-100"
+            className="p-1 rounded-lg hover:bg-muted/50 transition-colors"
           >
-            <ChevronLeft className="w-5 h-5 text-gray-600" />
+            <ChevronLeft className="w-5 h-5 text-muted-foreground" />
           </button>
-          <span className="font-semibold text-gray-800 w-12 text-center">
+          <span className="font-semibold text-foreground w-12 text-center">
             {year}
           </span>
           <button
             onClick={() => setYear(year + 1)}
-            className="p-1 rounded hover:bg-gray-100"
+            className="p-1 rounded-lg hover:bg-muted/50 transition-colors"
           >
-            <ChevronRight className="w-5 h-5 text-gray-600" />
+            <ChevronRight className="w-5 h-5 text-muted-foreground" />
           </button>
         </div>
       </div>
 
-      <p className="text-sm text-gray-500 mb-4">
+      <p className="text-sm text-muted-foreground mb-4">
         Jours fériés pour l&apos;année {year}. Ces jours seront exclus de la
         planification.
       </p>
 
       {/* Add new holiday */}
       {showAdd ? (
-        <div className="bg-white rounded-xl shadow-sm border border-blue-200 p-4 mb-4 flex items-end gap-3">
+        <div className="bg-card rounded-xl shadow-soft border border-primary/20 p-4 mb-4 flex items-end gap-3">
           <div className="flex-1">
-            <label className="block text-xs font-medium text-gray-500 mb-1">
+            <label className="block text-xs font-medium text-muted-foreground mb-1">
               Date
             </label>
             <input
               type="date"
               value={newDate}
               onChange={(e) => setNewDate(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              className="w-full rounded-xl border border-border/50 bg-card px-3 py-2 text-sm focus:ring-2 focus:ring-ring outline-none"
             />
           </div>
           <div className="flex-1">
-            <label className="block text-xs font-medium text-gray-500 mb-1">
+            <label className="block text-xs font-medium text-muted-foreground mb-1">
               Nom
             </label>
             <input
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               placeholder="Ex: Noël, 1er Mai..."
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              className="w-full rounded-xl border border-border/50 bg-card px-3 py-2 text-sm focus:ring-2 focus:ring-ring outline-none"
             />
           </div>
           <button
@@ -182,13 +176,13 @@ export default function CalendarConfigPage() {
               setNewName("");
             }}
             disabled={!newDate}
-            className="px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+            className="px-3 py-2 text-sm bg-primary text-primary-foreground rounded-xl hover:bg-primary-hover disabled:opacity-50 transition-colors"
           >
             <Check className="w-4 h-4" />
           </button>
           <button
             onClick={() => setShowAdd(false)}
-            className="px-3 py-2 text-sm text-gray-400 hover:bg-gray-100 rounded-lg"
+            className="px-3 py-2 text-sm text-muted-foreground hover:bg-muted/50 rounded-xl"
           >
             <X className="w-4 h-4" />
           </button>
@@ -196,7 +190,7 @@ export default function CalendarConfigPage() {
       ) : (
         <button
           onClick={() => setShowAdd(true)}
-          className="flex items-center gap-1 px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 rounded-lg mb-4"
+          className="flex items-center gap-1 px-3 py-1.5 text-sm text-primary hover:bg-primary/5 rounded-xl mb-4 transition-colors"
         >
           <Star className="w-4 h-4" />
           Marquer un jour férié
@@ -204,21 +198,21 @@ export default function CalendarConfigPage() {
       )}
 
       {/* Holidays list */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+      <div className="bg-card rounded-xl shadow-soft border border-border/50 overflow-hidden">
         {(holidays ?? []).length === 0 ? (
-          <div className="text-center py-8 text-gray-400 text-sm">
+          <div className="text-center py-8 text-muted-foreground text-sm">
             Aucun jour férié configuré pour {year}
           </div>
         ) : (
-          <div className="divide-y divide-gray-100">
+          <div className="divide-y divide-border/20">
             {(holidays ?? []).map((h) => (
               <div
                 key={h.date}
-                className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50"
+                className="flex items-center gap-3 px-4 py-3 hover:bg-muted/30"
               >
-                <CalendarDays className="w-4 h-4 text-red-500" />
-                <span className="text-sm text-gray-500 w-28">{h.date}</span>
-                <span className="text-sm font-medium text-gray-800 flex-1 capitalize">
+                <CalendarDays className="w-4 h-4 text-destructive" />
+                <span className="text-sm text-muted-foreground w-28">{h.date}</span>
+                <span className="text-sm font-medium text-foreground flex-1 capitalize">
                   {formatDate(h.date)}
                 </span>
                 {editingDate === h.date ? (
@@ -226,7 +220,7 @@ export default function CalendarConfigPage() {
                     <input
                       value={editName}
                       onChange={(e) => setEditName(e.target.value)}
-                      className="rounded border border-gray-300 px-2 py-1 text-sm w-40"
+                      className="rounded-lg border border-border/50 bg-card px-2 py-1 text-sm w-40 focus:ring-2 focus:ring-ring outline-none"
                       autoFocus
                     />
                     <button
@@ -237,20 +231,20 @@ export default function CalendarConfigPage() {
                           holiday_name: editName || null,
                         })
                       }
-                      className="text-green-600 p-1"
+                      className="text-success p-1"
                     >
                       <Check className="w-4 h-4" />
                     </button>
                     <button
                       onClick={() => setEditingDate(null)}
-                      className="text-gray-400 p-1"
+                      className="text-muted-foreground p-1"
                     >
                       <X className="w-4 h-4" />
                     </button>
                   </div>
                 ) : (
                   <>
-                    <span className="text-sm text-gray-600">
+                    <span className="text-sm text-muted-foreground">
                       {h.holiday_name ?? "—"}
                     </span>
                     <button
@@ -258,7 +252,7 @@ export default function CalendarConfigPage() {
                         setEditingDate(h.date);
                         setEditName(h.holiday_name ?? "");
                       }}
-                      className="text-gray-400 hover:text-blue-600 p-1"
+                      className="text-muted-foreground hover:text-primary p-1"
                     >
                       <Pencil className="w-3.5 h-3.5" />
                     </button>
@@ -270,7 +264,7 @@ export default function CalendarConfigPage() {
                           holiday_name: null,
                         })
                       }
-                      className="text-gray-400 hover:text-red-600 p-1"
+                      className="text-muted-foreground hover:text-destructive p-1"
                       title="Retirer le jour férié"
                     >
                       <X className="w-3.5 h-3.5" />

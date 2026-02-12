@@ -1,7 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useQueryClient, useQuery, useMutation } from "@tanstack/react-query";
+import { createClient } from "@/lib/supabase/client";
+import {
+  fetchSites as fetchSitesQuery,
+  updateSite as updateSiteQuery,
+  updateDepartment,
+  createDepartment,
+} from "@/lib/supabase/queries";
 import {
   Building2,
   ChevronDown,
@@ -36,24 +43,16 @@ export default function SitesConfigPage() {
   const [newDeptSite, setNewDeptSite] = useState<number | null>(null);
   const [newDeptName, setNewDeptName] = useState("");
 
+  const supabase = createClient();
+
   const { data: sites, isLoading } = useQuery<Site[]>({
     queryKey: ["config", "sites"],
-    queryFn: async () => {
-      const res = await fetch("/api/config/sites");
-      if (!res.ok) throw new Error("Erreur chargement");
-      return res.json();
-    },
+    queryFn: () => fetchSitesQuery(supabase) as Promise<Site[]>,
   });
 
   const updateSite = useMutation({
     mutationFn: async ({ id, name }: { id: number; name: string }) => {
-      const res = await fetch(`/api/config/sites/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name }),
-      });
-      if (!res.ok) throw new Error("Erreur");
-      return res.json();
+      return updateSiteQuery(supabase, id, { name });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["config", "sites"] });
@@ -62,20 +61,8 @@ export default function SitesConfigPage() {
   });
 
   const updateDept = useMutation({
-    mutationFn: async ({
-      id,
-      data,
-    }: {
-      id: number;
-      data: Record<string, unknown>;
-    }) => {
-      const res = await fetch(`/api/config/departments/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-      if (!res.ok) throw new Error("Erreur");
-      return res.json();
+    mutationFn: async ({ id, data }: { id: number; data: Record<string, unknown> }) => {
+      return updateDepartment(supabase, id, data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["config", "sites"] });
@@ -84,20 +71,8 @@ export default function SitesConfigPage() {
   });
 
   const addDept = useMutation({
-    mutationFn: async ({
-      name,
-      id_site,
-    }: {
-      name: string;
-      id_site: number;
-    }) => {
-      const res = await fetch("/api/config/departments", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, id_site }),
-      });
-      if (!res.ok) throw new Error("Erreur");
-      return res.json();
+    mutationFn: async ({ name, id_site }: { name: string; id_site: number }) => {
+      return createDepartment(supabase, { name, id_site });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["config", "sites"] });
@@ -117,7 +92,7 @@ export default function SitesConfigPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-20 text-gray-400">
+      <div className="flex items-center justify-center py-20 text-muted-foreground">
         <Loader2 className="w-6 h-6 animate-spin mr-2" />
         Chargement...
       </div>
@@ -125,16 +100,16 @@ export default function SitesConfigPage() {
   }
 
   return (
-    <div>
+    <div className="h-full overflow-auto p-6">
       <div className="flex items-center gap-2 mb-6">
         <Link
           href="/config"
-          className="text-sm text-gray-500 hover:text-gray-700"
+          className="text-sm text-muted-foreground hover:text-foreground"
         >
           Configuration
         </Link>
-        <span className="text-gray-300">/</span>
-        <h1 className="text-xl font-bold text-gray-900">
+        <span className="text-border">/</span>
+        <h1 className="text-xl font-bold text-foreground">
           Sites & Départements
         </h1>
       </div>
@@ -143,13 +118,13 @@ export default function SitesConfigPage() {
         {(sites ?? []).map((site) => (
           <div
             key={site.id_site}
-            className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden"
+            className="bg-card rounded-xl shadow-soft border border-border/50 overflow-hidden"
           >
             {/* Site header */}
-            <div className="flex items-center gap-3 px-4 py-3 bg-gray-50 border-b border-gray-200">
+            <div className="flex items-center gap-3 px-4 py-3 bg-muted/50 border-b border-border/30">
               <button
                 onClick={() => toggleExpand(site.id_site)}
-                className="text-gray-400 hover:text-gray-600"
+                className="text-muted-foreground hover:text-foreground"
               >
                 {expanded.has(site.id_site) ? (
                   <ChevronDown className="w-4 h-4" />
@@ -157,37 +132,37 @@ export default function SitesConfigPage() {
                   <ChevronRight className="w-4 h-4" />
                 )}
               </button>
-              <Building2 className="w-4 h-4 text-blue-500" />
+              <Building2 className="w-4 h-4 text-primary" />
 
               {editingSite === site.id_site ? (
                 <div className="flex items-center gap-2 flex-1">
                   <input
                     value={editName}
                     onChange={(e) => setEditName(e.target.value)}
-                    className="flex-1 rounded border border-gray-300 px-2 py-1 text-sm"
+                    className="flex-1 rounded-lg border border-border/50 bg-card px-2 py-1 text-sm focus:ring-2 focus:ring-ring outline-none"
                     autoFocus
                   />
                   <button
                     onClick={() =>
                       updateSite.mutate({ id: site.id_site, name: editName })
                     }
-                    className="text-green-600 p-1"
+                    className="text-success p-1"
                   >
                     <Check className="w-4 h-4" />
                   </button>
                   <button
                     onClick={() => setEditingSite(null)}
-                    className="text-gray-400 p-1"
+                    className="text-muted-foreground p-1"
                   >
                     <X className="w-4 h-4" />
                   </button>
                 </div>
               ) : (
                 <>
-                  <span className="font-semibold text-gray-800 flex-1">
+                  <span className="font-semibold text-foreground flex-1">
                     {site.name}
                   </span>
-                  <span className="text-xs text-gray-400">
+                  <span className="text-xs text-muted-foreground">
                     {site.departments.length} département
                     {site.departments.length !== 1 ? "s" : ""}
                   </span>
@@ -196,7 +171,7 @@ export default function SitesConfigPage() {
                       setEditingSite(site.id_site);
                       setEditName(site.name);
                     }}
-                    className="text-gray-400 hover:text-blue-600 p-1"
+                    className="text-muted-foreground hover:text-primary p-1"
                   >
                     <Pencil className="w-3.5 h-3.5" />
                   </button>
@@ -206,7 +181,7 @@ export default function SitesConfigPage() {
 
             {/* Departments */}
             {expanded.has(site.id_site) && (
-              <div className="divide-y divide-gray-100">
+              <div className="divide-y divide-border/20">
                 {site.departments.map((dept) => (
                   <div
                     key={dept.id_department}
@@ -217,7 +192,7 @@ export default function SitesConfigPage() {
                         <input
                           value={editName}
                           onChange={(e) => setEditName(e.target.value)}
-                          className="flex-1 rounded border border-gray-300 px-2 py-1 text-sm"
+                          className="flex-1 rounded-lg border border-border/50 bg-card px-2 py-1 text-sm focus:ring-2 focus:ring-ring outline-none"
                           autoFocus
                         />
                         <button
@@ -227,13 +202,13 @@ export default function SitesConfigPage() {
                               data: { name: editName },
                             })
                           }
-                          className="text-green-600 p-1"
+                          className="text-success p-1"
                         >
                           <Check className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() => setEditingDept(null)}
-                          className="text-gray-400 p-1"
+                          className="text-muted-foreground p-1"
                         >
                           <X className="w-4 h-4" />
                         </button>
@@ -243,8 +218,8 @@ export default function SitesConfigPage() {
                         <span
                           className={`text-sm flex-1 ${
                             dept.is_active
-                              ? "text-gray-700"
-                              : "text-gray-400 line-through"
+                              ? "text-foreground"
+                              : "text-muted-foreground line-through"
                           }`}
                         >
                           {dept.name}
@@ -258,8 +233,8 @@ export default function SitesConfigPage() {
                           }
                           className={`text-xs px-2 py-0.5 rounded-full ${
                             dept.is_active
-                              ? "bg-green-50 text-green-600"
-                              : "bg-gray-100 text-gray-400"
+                              ? "bg-success/10 text-success"
+                              : "bg-muted text-muted-foreground"
                           }`}
                         >
                           {dept.is_active ? "Actif" : "Inactif"}
@@ -269,7 +244,7 @@ export default function SitesConfigPage() {
                             setEditingDept(dept.id_department);
                             setEditName(dept.name);
                           }}
-                          className="text-gray-400 hover:text-blue-600 p-1"
+                          className="text-muted-foreground hover:text-primary p-1"
                         >
                           <Pencil className="w-3.5 h-3.5" />
                         </button>
@@ -285,7 +260,7 @@ export default function SitesConfigPage() {
                       value={newDeptName}
                       onChange={(e) => setNewDeptName(e.target.value)}
                       placeholder="Nom du département..."
-                      className="flex-1 rounded border border-gray-300 px-2 py-1 text-sm"
+                      className="flex-1 rounded-lg border border-border/50 bg-card px-2 py-1 text-sm focus:ring-2 focus:ring-ring outline-none"
                       autoFocus
                     />
                     <button
@@ -296,13 +271,13 @@ export default function SitesConfigPage() {
                         })
                       }
                       disabled={!newDeptName || addDept.isPending}
-                      className="text-green-600 p-1"
+                      className="text-success p-1"
                     >
                       <Check className="w-4 h-4" />
                     </button>
                     <button
                       onClick={() => setNewDeptSite(null)}
-                      className="text-gray-400 p-1"
+                      className="text-muted-foreground p-1"
                     >
                       <X className="w-4 h-4" />
                     </button>
@@ -313,7 +288,7 @@ export default function SitesConfigPage() {
                       setNewDeptSite(site.id_site);
                       setNewDeptName("");
                     }}
-                    className="flex items-center gap-2 px-4 py-2 pl-12 text-sm text-blue-600 hover:bg-blue-50 w-full transition-colors"
+                    className="flex items-center gap-2 px-4 py-2 pl-12 text-sm text-primary hover:bg-primary/5 w-full transition-colors"
                   >
                     <Plus className="w-3.5 h-3.5" />
                     Ajouter un département
