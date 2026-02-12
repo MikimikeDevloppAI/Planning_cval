@@ -6,13 +6,12 @@ import { format, isToday, isMonday, parseISO } from "date-fns";
 import { fr } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { getInitials } from "@/lib/utils/initials";
-import { PersonAvatar } from "./person-avatar";
 import type { PlanningSite, PlanningAssignment } from "@/lib/types/database";
 
 /** Role id → short label (role 1 = Standard, no tag) */
 const ROLE_TAG: Record<number, string> = {
-  2: "1f",   // Fermeture
-  3: "2f",   // Aide fermeture
+  2: "1f",
+  3: "2f",
 };
 
 /** Fixed width for the first column */
@@ -42,7 +41,6 @@ export function DepartmentsTableView({ days, sites, leaves = [], onDragEnd }: De
     useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } })
   );
 
-  // Auto-scroll to today on mount
   useEffect(() => {
     if (!scrollRef.current) return;
     const todayStr = format(new Date(), "yyyy-MM-dd");
@@ -65,10 +63,8 @@ export function DepartmentsTableView({ days, sites, leaves = [], onDragEnd }: De
         if (d >= leave.start_date && d <= leave.end_date) {
           if (!index.has(d)) index.set(d, []);
           const existing = index.get(d)!;
-          // Avoid duplicate staff for same day
           const alreadyExists = existing.find((e) => e.id_staff === leave.id_staff);
           if (alreadyExists) {
-            // If already full or different period → make full
             if (leave.period === null || (alreadyExists.period !== null && alreadyExists.period !== leave.period)) {
               alreadyExists.period = null;
             }
@@ -238,11 +234,6 @@ export function DepartmentsTableView({ days, sites, leaves = [], onDragEnd }: De
                           const amAssignments = day.am.blocks.flatMap((b) => b.assignments);
                           const pmAssignments = day.pm.blocks.flatMap((b) => b.assignments);
 
-                          const amDocs = amAssignments.filter((a) => a.assignment_type === "DOCTOR");
-                          const amSecs = amAssignments.filter((a) => a.assignment_type === "SECRETARY");
-                          const pmDocs = pmAssignments.filter((a) => a.assignment_type === "DOCTOR");
-                          const pmSecs = pmAssignments.filter((a) => a.assignment_type === "SECRETARY");
-
                           const cellBg = today
                             ? "bg-sky-50"
                             : isOddDay
@@ -258,14 +249,7 @@ export function DepartmentsTableView({ days, sites, leaves = [], onDragEnd }: De
                                   cellBg
                                 )}
                               >
-                                <PeriodCell
-                                  doctors={amDocs}
-                                  secretaries={amSecs}
-                                  period="AM"
-                                  day={day.date}
-                                  deptId={dept.id_department}
-                                  deptName={dept.name}
-                                />
+                                <PeriodCard assignments={amAssignments} />
                               </td>,
                               <td
                                 key={`${day.date}-pm`}
@@ -274,14 +258,7 @@ export function DepartmentsTableView({ days, sites, leaves = [], onDragEnd }: De
                                   cellBg
                                 )}
                               >
-                                <PeriodCell
-                                  doctors={pmDocs}
-                                  secretaries={pmSecs}
-                                  period="PM"
-                                  day={day.date}
-                                  deptId={dept.id_department}
-                                  deptName={dept.name}
-                                />
+                                <PeriodCard assignments={pmAssignments} />
                               </td>,
                           ];
                         })}
@@ -343,17 +320,7 @@ export function DepartmentsTableView({ days, sites, leaves = [], onDragEnd }: De
                           cellBg
                         )}
                       >
-                        <div className="grid grid-cols-2 gap-0.5">
-                          {amLeaves.map((l) => (
-                            <AbsentAvatar
-                              key={l.id_staff}
-                              initials={getInitials(l.firstname, l.lastname)}
-                              fullName={`${l.firstname} ${l.lastname}`}
-                              isDoctor={l.position === 1}
-                              period={l.period === null ? "FULL" : l.period === "AM" ? "AM" : "FULL"}
-                            />
-                          ))}
-                        </div>
+                        <AbsenceCard leaves={amLeaves} />
                       </td>,
                       <td
                         key={`${dateStr}-abs-pm`}
@@ -362,17 +329,7 @@ export function DepartmentsTableView({ days, sites, leaves = [], onDragEnd }: De
                           cellBg
                         )}
                       >
-                        <div className="grid grid-cols-2 gap-0.5">
-                          {pmLeaves.map((l) => (
-                            <AbsentAvatar
-                              key={l.id_staff}
-                              initials={getInitials(l.firstname, l.lastname)}
-                              fullName={`${l.firstname} ${l.lastname}`}
-                              isDoctor={l.position === 1}
-                              period={l.period === null ? "FULL" : l.period === "PM" ? "PM" : "FULL"}
-                            />
-                          ))}
-                        </div>
+                        <AbsenceCard leaves={pmLeaves} />
                       </td>,
                     ];
                   })}
@@ -388,118 +345,114 @@ export function DepartmentsTableView({ days, sites, leaves = [], onDragEnd }: De
 
 // ─── Sub-components ──────────────────────────────────────
 
-function PeriodCell({
-  doctors,
-  secretaries,
-  period,
-  day,
-  deptId,
-  deptName,
-}: {
-  doctors: PlanningAssignment[];
-  secretaries: PlanningAssignment[];
-  period: "AM" | "PM";
-  day: string;
-  deptId: number;
-  deptName: string;
-}) {
-  const isEmpty = doctors.length === 0 && secretaries.length === 0;
-
-  if (isEmpty) {
-    return <div className="min-h-[28px]" />;
+/** Single compact card showing all staff for a period cell */
+function PeriodCard({ assignments }: { assignments: PlanningAssignment[] }) {
+  if (assignments.length === 0) {
+    return <div className="min-h-[24px]" />;
   }
 
+  const doctors = assignments.filter((a) => a.assignment_type === "DOCTOR");
+  const secretaries = assignments.filter((a) => a.assignment_type === "SECRETARY");
+
   return (
-    <div className="space-y-1">
-      {/* Doctors */}
-      {doctors.length > 0 && (
-        <div className="grid grid-cols-2 gap-0.5">
-          {doctors.map((a) => (
-            <PersonAvatar
-              key={`d-${a.id_staff}-${day}-${period}`}
-              personId={a.id_staff}
-              personType="doctor"
-              initials={getInitials(a.firstname, a.lastname)}
-              fullName={`${a.firstname} ${a.lastname}`}
-              period={period}
-              date={day}
-              sourceDeptId={deptId}
-              sourceDeptName={deptName}
-              assignmentId={a.id_assignment}
-              draggable={false}
-            />
-          ))}
-        </div>
-      )}
+    <div className="relative group/card">
+      <div className="rounded-md border border-slate-200 bg-white px-1.5 py-1 min-h-[24px] hover:border-slate-300 transition-colors">
+        {/* Doctors line */}
+        {doctors.length > 0 && (
+          <div className="flex flex-wrap gap-x-1 items-baseline">
+            {doctors.map((a) => (
+              <span
+                key={a.id_staff}
+                className="text-[11px] font-semibold text-sky-700 leading-tight"
+              >
+                {getInitials(a.firstname, a.lastname)}
+              </span>
+            ))}
+          </div>
+        )}
+        {/* Secretaries line */}
+        {secretaries.length > 0 && (
+          <div className="flex flex-wrap gap-x-1 items-baseline">
+            {secretaries.map((a) => {
+              const tag = ROLE_TAG[a.id_role ?? 1];
+              return (
+                <span
+                  key={a.id_staff}
+                  className="text-[11px] font-medium text-emerald-700 leading-tight"
+                >
+                  {getInitials(a.firstname, a.lastname)}
+                  {tag && (
+                    <span className="text-[9px] text-emerald-500 ml-px">{tag}</span>
+                  )}
+                </span>
+              );
+            })}
+          </div>
+        )}
+      </div>
 
-      {/* Separator */}
-      {doctors.length > 0 && secretaries.length > 0 && (
-        <div className="border-t border-dashed border-slate-200 mx-0.5" />
-      )}
-
-      {/* Secretaries */}
-      {secretaries.length > 0 && (
-        <div className="grid grid-cols-2 gap-0.5">
-          {secretaries.map((a) => (
-            <PersonAvatar
-              key={`s-${a.id_staff}-${day}-${period}`}
-              personId={a.id_staff}
-              personType="secretary"
-              initials={getInitials(a.firstname, a.lastname)}
-              fullName={`${a.firstname} ${a.lastname}`}
-              period={period}
-              roleTag={ROLE_TAG[a.id_role ?? 1]}
-              date={day}
-              sourceDeptId={deptId}
-              sourceDeptName={deptName}
-              assignmentId={a.id_assignment}
-              roleId={a.id_role ?? undefined}
-              skillId={a.id_skill ?? undefined}
-            />
-          ))}
+      {/* Hover tooltip with full names */}
+      {assignments.length > 0 && (
+        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 rounded-lg bg-slate-800 text-white text-xs shadow-xl opacity-0 pointer-events-none group-hover/card:opacity-100 transition-opacity duration-150 z-50 whitespace-nowrap">
+          {doctors.length > 0 && (
+            <div>
+              <div className="text-sky-300 font-semibold text-[10px] uppercase tracking-wide mb-0.5">Médecins</div>
+              {doctors.map((a) => (
+                <div key={a.id_staff} className="text-sm">{a.firstname} {a.lastname}</div>
+              ))}
+            </div>
+          )}
+          {doctors.length > 0 && secretaries.length > 0 && (
+            <div className="border-t border-slate-600 my-1" />
+          )}
+          {secretaries.length > 0 && (
+            <div>
+              <div className="text-emerald-300 font-semibold text-[10px] uppercase tracking-wide mb-0.5">Secrétaires</div>
+              {secretaries.map((a) => {
+                const tag = ROLE_TAG[a.id_role ?? 1];
+                return (
+                  <div key={a.id_staff} className="text-sm">
+                    {a.firstname} {a.lastname}
+                    {tag && <span className="text-slate-400 ml-1">({tag})</span>}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px border-4 border-transparent border-t-slate-800" />
         </div>
       )}
     </div>
   );
 }
 
-function AbsentAvatar({
-  initials,
-  fullName,
-  isDoctor,
-  period,
-}: {
-  initials: string;
-  fullName: string;
-  isDoctor: boolean;
-  period: "AM" | "PM" | "FULL";
-}) {
-  const periodLabel = period === "FULL" ? "Journée" : period === "AM" ? "Matin" : "Après-midi";
-  const positionLabel = isDoctor ? "Médecin" : "Secrétaire";
+/** Compact card for absent staff in a period */
+function AbsenceCard({ leaves }: { leaves: { id_staff: number; firstname: string; lastname: string; position: number; period: "AM" | "PM" | null }[] }) {
+  if (leaves.length === 0) {
+    return <div className="min-h-[24px]" />;
+  }
 
   return (
     <div className="relative group/abs">
-      <div
-        className={cn(
-          "inline-flex items-center justify-center gap-1 h-7 min-w-[52px] rounded-md px-1.5",
-          "text-xs font-semibold leading-none",
-          "transition-all duration-150 cursor-default",
-          isDoctor
-            ? "bg-sky-50 border border-sky-400 text-sky-900 hover:bg-sky-100"
-            : "bg-emerald-50 border border-emerald-400 text-emerald-900 hover:bg-emerald-100",
-        )}
-      >
-        <span>{initials}</span>
+      <div className="rounded-md border border-red-200 bg-red-50 px-1.5 py-1 min-h-[24px] hover:border-red-300 transition-colors">
+        <div className="flex flex-wrap gap-x-1 items-baseline">
+          {leaves.map((l) => (
+            <span
+              key={l.id_staff}
+              className="text-[11px] font-medium text-red-600 leading-tight"
+            >
+              {getInitials(l.firstname, l.lastname)}
+            </span>
+          ))}
+        </div>
       </div>
 
-      {/* Rich hover tooltip */}
+      {/* Hover tooltip */}
       <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 rounded-lg bg-slate-800 text-white text-xs shadow-xl opacity-0 pointer-events-none group-hover/abs:opacity-100 transition-opacity duration-150 z-50 whitespace-nowrap">
-        <div className="font-semibold text-sm">{fullName}</div>
-        <div className="text-slate-300 mt-0.5">{positionLabel}</div>
-        <div className="flex items-center gap-1.5 mt-1 text-red-300 font-medium">
-          <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
-          Absent(e) — {periodLabel}
-        </div>
+        <div className="text-red-300 font-semibold text-[10px] uppercase tracking-wide mb-0.5">Absents</div>
+        {leaves.map((l) => (
+          <div key={l.id_staff} className="text-sm">{l.firstname} {l.lastname}</div>
+        ))}
         <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px border-4 border-transparent border-t-slate-800" />
       </div>
     </div>
