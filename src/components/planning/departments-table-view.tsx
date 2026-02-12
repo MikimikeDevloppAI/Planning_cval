@@ -128,7 +128,7 @@ export function DepartmentsTableView({ days, sites, leaves = [], onDragEnd }: De
                     key={dateStr}
                     colSpan={2}
                     className={cn(
-                      "px-1 pt-2 pb-0 text-center border-b border-slate-100 border-r-2 border-r-slate-200",
+                      "px-1 pt-2 pb-0 text-center border-b border-slate-200 border-r-2 border-r-slate-300",
                       isOdd ? "bg-slate-50" : "bg-white",
                       isMon && dayIdx > 0 && "border-l-[6px] border-l-indigo-400",
                       today && "bg-sky-50 border-b-2 border-b-sky-400"
@@ -163,7 +163,7 @@ export function DepartmentsTableView({ days, sites, leaves = [], onDragEnd }: De
                     <th
                       key={`${dateStr}-am`}
                       className={cn(
-                        "px-1 py-1 text-center text-[9px] font-semibold uppercase tracking-wider border-b border-r border-slate-100 min-w-[80px]",
+                        "px-1 py-1 text-center text-[9px] font-semibold uppercase tracking-wider border-b border-slate-200 border-r border-r-slate-200 min-w-[80px]",
                         baseBg,
                         isMon && dayIdx > 0 && "border-l-[6px] border-l-indigo-400",
                         "text-slate-500"
@@ -174,7 +174,7 @@ export function DepartmentsTableView({ days, sites, leaves = [], onDragEnd }: De
                     <th
                       key={`${dateStr}-pm`}
                       className={cn(
-                        "px-1 py-1 text-center text-[9px] font-semibold uppercase tracking-wider border-b border-r-2 border-r-slate-200 min-w-[80px]",
+                        "px-1 py-1 text-center text-[9px] font-semibold uppercase tracking-wider border-b border-slate-200 border-r-2 border-r-slate-300 min-w-[80px]",
                         baseBg,
                         "text-slate-500"
                       )}
@@ -253,7 +253,7 @@ export function DepartmentsTableView({ days, sites, leaves = [], onDragEnd }: De
                               <td
                                 key={`${day.date}-am`}
                                 className={cn(
-                                  "px-1 py-1.5 align-top border-b border-slate-100 border-r border-r-slate-100",
+                                  "px-1 py-1.5 align-top border-b border-slate-100 border-r border-r-slate-200",
                                   isMon && dayIdx > 0 && "border-l-[6px] border-l-indigo-400",
                                   cellBg
                                 )}
@@ -270,7 +270,7 @@ export function DepartmentsTableView({ days, sites, leaves = [], onDragEnd }: De
                               <td
                                 key={`${day.date}-pm`}
                                 className={cn(
-                                  "px-1 py-1.5 align-top border-b border-slate-100 border-r-2 border-r-slate-200",
+                                  "px-1 py-1.5 align-top border-b border-slate-100 border-r-2 border-r-slate-300",
                                   cellBg
                                 )}
                               >
@@ -338,7 +338,7 @@ export function DepartmentsTableView({ days, sites, leaves = [], onDragEnd }: De
                       <td
                         key={`${dateStr}-abs-am`}
                         className={cn(
-                          "px-1 py-1.5 align-top border-b border-slate-100 border-r border-r-slate-100",
+                          "px-1 py-1.5 align-top border-b border-slate-100 border-r border-r-slate-200",
                           isMon && dayIdx > 0 && "border-l-[6px] border-l-indigo-400",
                           cellBg
                         )}
@@ -358,7 +358,7 @@ export function DepartmentsTableView({ days, sites, leaves = [], onDragEnd }: De
                       <td
                         key={`${dateStr}-abs-pm`}
                         className={cn(
-                          "px-1 py-1.5 align-top border-b border-slate-100 border-r-2 border-r-slate-200",
+                          "px-1 py-1.5 align-top border-b border-slate-100 border-r-2 border-r-slate-300",
                           cellBg
                         )}
                       >

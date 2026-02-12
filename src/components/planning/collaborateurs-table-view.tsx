@@ -13,6 +13,25 @@ type FilterType = "tous" | "medecins" | "secretaires";
 /** Fixed width for the first column */
 const COL1 = "w-[220px] min-w-[220px] max-w-[220px]";
 
+/** Role id → short tag (role 1 = Standard, no tag) */
+const ROLE_TAG: Record<number, string> = {
+  2: "1f",
+  3: "2f",
+};
+
+/** Abbreviate known site names */
+const SITE_ABBREV: Record<string, string> = {
+  "clinique la vallée": "CVAL",
+  "porrentruy": "PTY",
+};
+
+function abbreviateSite(name: string): string {
+  const key = name.toLowerCase().trim();
+  if (SITE_ABBREV[key]) return SITE_ABBREV[key];
+  // Fallback: first 4 chars uppercase
+  return name.slice(0, 4).toUpperCase();
+}
+
 interface LeaveEntry {
   id_leave: number;
   id_staff: number;
@@ -34,8 +53,10 @@ interface PersonDay {
   siteName: string;
   period: "AM" | "PM" | "FULL_DAY";
   roleName: string | null;
+  roleId: number | null;
   blockType: string | null;
   activityName: string | null;
+  assignmentType: string;
 }
 
 interface CollaborateurData {
@@ -46,6 +67,13 @@ interface CollaborateurData {
   days: Map<string, PersonDay[]>;
 }
 
+const periodLabels: Record<string, string> = {
+  AM: "Matin",
+  PM: "Après-midi",
+  FULL_DAY: "Journée",
+  FULL: "Journée",
+};
+
 export function CollaborateursTableView({
   days,
   sites,
@@ -54,13 +82,12 @@ export function CollaborateursTableView({
   const scrollRef = useRef<HTMLDivElement>(null);
   const [filter, setFilter] = useState<FilterType>("tous");
 
-  // Build a lookup: staffId → Set of "date|period" keys for quick leave checks
+  // Build a lookup: staffId → Map of date → leave period
   const leaveIndex = useMemo(() => {
     const index = new Map<number, Map<string, "AM" | "PM" | "FULL">>();
     for (const leave of leaves) {
       if (!index.has(leave.id_staff)) index.set(leave.id_staff, new Map());
       const staffLeaves = index.get(leave.id_staff)!;
-      // Iterate through all days that overlap this leave
       for (const d of days) {
         if (d >= leave.start_date && d <= leave.end_date) {
           const existing = staffLeaves.get(d);
@@ -122,8 +149,10 @@ export function CollaborateursTableView({
                   siteName: site.name,
                   period,
                   roleName: a.role_name,
+                  roleId: a.id_role,
                   blockType: block.block_type ?? null,
                   activityName: block.activity_name ?? null,
+                  assignmentType: a.assignment_type,
                 });
               }
             }
@@ -220,7 +249,7 @@ export function CollaborateursTableView({
                   <th
                     key={dateStr}
                     className={cn(
-                      "px-1 py-2 text-center min-w-[150px] border-b border-r border-slate-200",
+                      "px-1 py-2 text-center min-w-[150px] border-b border-r-2 border-r-slate-300",
                       isOdd ? "bg-slate-50" : "bg-white",
                       isMon && dayIdx > 0 && "border-l-[6px] border-l-indigo-400",
                       today && "bg-sky-50 border-b-2 border-b-sky-400"
@@ -301,27 +330,30 @@ export function CollaborateursTableView({
                       <td
                         key={dateStr}
                         className={cn(
-                          "px-1.5 py-2 border-b border-slate-100 border-r border-r-slate-200 align-top",
+                          "px-1 py-1.5 border-b border-slate-100 border-r-2 border-r-slate-300 align-top",
                           isMon && dayIdx > 0 && "border-l-[6px] border-l-indigo-400",
                           cellBg
                         )}
                       >
-                        <div className="flex flex-wrap gap-1 min-h-[28px]">
+                        <div className="grid grid-cols-2 gap-0.5 min-h-[28px]">
                           {leaveType && (
                             <AbsenceBadge
                               period={leaveType}
-                              isDoctor={collab.position === 1}
+                              isDoctor={isDoc}
                               fullName={`${collab.firstname} ${collab.lastname}`}
                             />
                           )}
                           {dayAssignments.map((assignment, i) => (
-                            <SiteBadge
+                            <DeptBadge
                               key={i}
+                              siteName={assignment.siteName}
                               deptName={assignment.deptName}
                               period={assignment.period}
                               roleName={assignment.roleName}
+                              roleId={assignment.roleId}
                               blockType={assignment.blockType}
                               activityName={assignment.activityName}
+                              assignmentType={assignment.assignmentType}
                             />
                           ))}
                         </div>
@@ -338,59 +370,71 @@ export function CollaborateursTableView({
   );
 }
 
-function SiteBadge({
+// ─── Sub-components ──────────────────────────────────────
+
+/** Abbreviate dept name to keep badges compact */
+function abbreviateDept(name: string): string {
+  if (name.length <= 8) return name;
+  return name.slice(0, 7) + ".";
+}
+
+const PERIOD_COLORS = {
+  AM: "bg-amber-50 border-amber-300 text-amber-900 hover:bg-amber-100",
+  PM: "bg-violet-50 border-violet-300 text-violet-900 hover:bg-violet-100",
+  FULL_DAY: "bg-slate-50 border-slate-300 text-slate-800 hover:bg-slate-100",
+};
+
+function DeptBadge({
+  siteName,
   deptName,
   period,
   roleName,
+  roleId,
   blockType,
   activityName,
 }: {
+  siteName: string;
   deptName: string;
   period: "AM" | "PM" | "FULL_DAY";
   roleName: string | null;
+  roleId: number | null;
   blockType: string | null;
   activityName: string | null;
+  assignmentType: string;
 }) {
-  const displayName = blockType === "SURGERY" && activityName
-    ? activityName
-    : deptName;
-
-  const abbreviate = (name: string) => {
-    if (name.length <= 10) return name;
-    return name.slice(0, 9) + ".";
-  };
-
   const isSurgery = blockType === "SURGERY";
+  const roleTag = roleId ? ROLE_TAG[roleId] : undefined;
+  const siteAbbrev = abbreviateSite(siteName);
+  const deptAbbrev = abbreviateDept(deptName);
 
-  const periodLabel = period === "AM" ? "Matin" : period === "PM" ? "Après-midi" : "Journée";
+  const colors = isSurgery
+    ? "bg-indigo-50 border-indigo-300 text-indigo-900 hover:bg-indigo-100"
+    : PERIOD_COLORS[period];
 
   return (
-    <div className="relative group/site">
+    <div className="relative group/dept">
       <div
         className={cn(
-          "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px]",
-          "border",
-          "transition-all duration-150 cursor-default",
-          isSurgery
-            ? "bg-indigo-50 border-indigo-200 hover:bg-indigo-100"
-            : "bg-slate-50 border-slate-200 hover:bg-slate-100"
+          "inline-flex flex-col items-center justify-center min-w-[52px] rounded-md px-1.5 py-0.5",
+          "border transition-all duration-150 cursor-default",
+          colors
         )}
       >
-        <span className={cn(
-          "font-medium whitespace-nowrap",
-          isSurgery ? "text-indigo-700" : "text-slate-700"
-        )}>
-          {abbreviate(displayName)}
+        <span className="text-[10px] font-bold leading-tight">{siteAbbrev}</span>
+        <span className="text-[9px] font-medium leading-tight opacity-70">
+          {deptAbbrev}
+          {roleTag && <span className="ml-0.5 font-bold">{roleTag}</span>}
         </span>
       </div>
 
       {/* Rich hover tooltip */}
-      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 rounded-lg bg-slate-800 text-white text-xs shadow-xl opacity-0 pointer-events-none group-hover/site:opacity-100 transition-opacity duration-150 z-50 whitespace-nowrap">
-        <div className="font-semibold text-sm">{deptName}</div>
-        {activityName && (
+      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 rounded-lg bg-slate-800 text-white text-xs shadow-xl opacity-0 pointer-events-none group-hover/dept:opacity-100 transition-opacity duration-150 z-50 whitespace-nowrap">
+        <div className="font-semibold text-sm">{siteName}</div>
+        <div className="text-slate-300 mt-0.5">{deptName}</div>
+        {isSurgery && activityName && (
           <div className="text-indigo-300 mt-0.5">{activityName}</div>
         )}
-        <div className="text-slate-300 mt-0.5">{periodLabel}</div>
+        <div className="text-slate-300 mt-0.5">{periodLabels[period]}</div>
         {roleName && (
           <div className="text-slate-400 mt-0.5">Rôle : {roleName}</div>
         )}
@@ -409,25 +453,20 @@ function AbsenceBadge({
   isDoctor: boolean;
   fullName: string;
 }) {
-  const periodLabel = period === "FULL" ? "Journée" : period === "AM" ? "Matin" : "Après-midi";
   const positionLabel = isDoctor ? "Médecin" : "Secrétaire";
+
   return (
     <div className="relative group/abs">
       <div
         className={cn(
-          "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px]",
-          "border",
-          "transition-all duration-150 cursor-default",
-          isDoctor
-            ? "bg-sky-50 border-sky-200 hover:bg-sky-100"
-            : "bg-emerald-50 border-emerald-200 hover:bg-emerald-100",
+          "inline-flex flex-col items-center justify-center min-w-[52px] rounded-md px-1.5 py-0.5",
+          "border transition-all duration-150 cursor-default",
+          "bg-red-50 border-red-300 text-red-700 hover:bg-red-100",
         )}
       >
-        <span className={cn(
-          "font-medium whitespace-nowrap",
-          isDoctor ? "text-sky-700" : "text-emerald-700"
-        )}>
-          Absence
+        <span className="text-[10px] font-bold leading-tight">ABS</span>
+        <span className="text-[9px] font-medium leading-tight opacity-70">
+          {periodLabels[period]}
         </span>
       </div>
 
@@ -437,7 +476,7 @@ function AbsenceBadge({
         <div className="text-slate-300 mt-0.5">{positionLabel}</div>
         <div className="flex items-center gap-1.5 mt-1 text-red-300 font-medium">
           <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
-          Absent(e) — {periodLabel}
+          Absent(e) — {periodLabels[period]}
         </div>
         <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px border-4 border-transparent border-t-slate-800" />
       </div>
