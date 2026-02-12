@@ -15,7 +15,7 @@ const ROLE_TAG: Record<number, string> = {
 };
 
 /** Fixed width for the first column */
-const COL1 = "w-[220px] min-w-[220px] max-w-[220px]";
+const COL1 = "w-[180px] min-w-[180px] max-w-[180px]";
 
 interface LeaveEntry {
   id_leave: number;
@@ -33,6 +33,49 @@ interface DepartmentsTableViewProps {
   onDragEnd?: (data: { oldAssignmentId: number; targetBlockId: number; staffId: number; assignmentType: string; roleId: number | null; skillId: number | null }) => void;
 }
 
+/** Merged person for a day: AM, PM, or FULL */
+interface DayPerson {
+  id_staff: number;
+  firstname: string;
+  lastname: string;
+  type: "DOCTOR" | "SECRETARY";
+  period: "AM" | "PM" | "FULL";
+  roleId: number | null;
+}
+
+function mergeAssignments(am: PlanningAssignment[], pm: PlanningAssignment[]): DayPerson[] {
+  const map = new Map<number, DayPerson>();
+
+  for (const a of am) {
+    map.set(a.id_staff, {
+      id_staff: a.id_staff,
+      firstname: a.firstname,
+      lastname: a.lastname,
+      type: a.assignment_type as "DOCTOR" | "SECRETARY",
+      period: "AM",
+      roleId: a.id_role,
+    });
+  }
+
+  for (const a of pm) {
+    const existing = map.get(a.id_staff);
+    if (existing) {
+      existing.period = "FULL";
+    } else {
+      map.set(a.id_staff, {
+        id_staff: a.id_staff,
+        firstname: a.firstname,
+        lastname: a.lastname,
+        type: a.assignment_type as "DOCTOR" | "SECRETARY",
+        period: "PM",
+        roleId: a.id_role,
+      });
+    }
+  }
+
+  return Array.from(map.values());
+}
+
 export function DepartmentsTableView({ days, sites, leaves = [], onDragEnd }: DepartmentsTableViewProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -46,7 +89,7 @@ export function DepartmentsTableView({ days, sites, leaves = [], onDragEnd }: De
     const todayStr = format(new Date(), "yyyy-MM-dd");
     const todayIndex = days.indexOf(todayStr);
     if (todayIndex >= 0) {
-      scrollRef.current.scrollLeft = Math.max(0, (todayIndex - 2) * 170);
+      scrollRef.current.scrollLeft = Math.max(0, (todayIndex - 2) * 140);
     }
   }, [days]);
 
@@ -100,18 +143,31 @@ export function DepartmentsTableView({ days, sites, leaves = [], onDragEnd }: De
         className="overflow-auto h-full rounded-xl border border-slate-200 bg-white"
       >
         <table className="border-collapse w-max min-w-full">
-          {/* ───── Header: 2 rows ───── */}
           <thead className="sticky top-0 z-30">
-            {/* Row 1: Day labels */}
             <tr>
               <th
-                rowSpan={2}
                 className={cn(
-                  "sticky left-0 z-40 bg-slate-50 border-b border-r border-slate-200 px-5 py-3 text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wide align-bottom",
+                  "sticky left-0 z-40 bg-slate-50 border-b border-r border-slate-200 px-4 py-2.5 text-left",
                   COL1
                 )}
               >
-                Département
+                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
+                  Département
+                </span>
+                <div className="flex items-center gap-2.5 mt-1">
+                  <span className="inline-flex items-center gap-1 text-[9px] text-slate-400">
+                    <span className="w-2.5 h-2.5 rounded-sm border-l-[2px] border-l-amber-400 bg-amber-50 border border-amber-200" />
+                    Matin
+                  </span>
+                  <span className="inline-flex items-center gap-1 text-[9px] text-slate-400">
+                    <span className="w-2.5 h-2.5 rounded-sm border-l-[2px] border-l-violet-400 bg-violet-50 border border-violet-200" />
+                    Après-midi
+                  </span>
+                  <span className="inline-flex items-center gap-1 text-[9px] text-slate-400">
+                    <span className="w-2.5 h-2.5 rounded-sm bg-slate-50 border border-slate-200" />
+                    Journée
+                  </span>
+                </div>
               </th>
               {days.map((dateStr, dayIdx) => {
                 const date = parseISO(dateStr);
@@ -122,9 +178,8 @@ export function DepartmentsTableView({ days, sites, leaves = [], onDragEnd }: De
                 return (
                   <th
                     key={dateStr}
-                    colSpan={2}
                     className={cn(
-                      "px-1 pt-2 pb-0 text-center border-b border-slate-200 border-r-2 border-r-slate-300",
+                      "px-1 py-2 text-center min-w-[130px] border-b border-r-2 border-r-slate-300",
                       isOdd ? "bg-slate-50" : "bg-white",
                       isMon && dayIdx > 0 && "border-l-[6px] border-l-indigo-400",
                       today && "bg-sky-50 border-b-2 border-b-sky-400"
@@ -146,135 +201,89 @@ export function DepartmentsTableView({ days, sites, leaves = [], onDragEnd }: De
                 );
               })}
             </tr>
-            {/* Row 2: AM / PM sub-headers */}
-            <tr>
-              {days.map((dateStr, dayIdx) => {
-                const date = parseISO(dateStr);
-                const isMon = isMonday(date);
-                const today = isToday(date);
-                const isOdd = dayIdx % 2 === 1;
-                const baseBg = today ? "bg-sky-50" : isOdd ? "bg-slate-50" : "bg-white";
-
-                return [
-                    <th
-                      key={`${dateStr}-am`}
-                      className={cn(
-                        "px-1 py-1 text-center text-[9px] font-semibold uppercase tracking-wider border-b border-slate-200 border-r border-r-slate-200 min-w-[80px]",
-                        baseBg,
-                        isMon && dayIdx > 0 && "border-l-[6px] border-l-indigo-400",
-                        "text-slate-500"
-                      )}
-                    >
-                      AM
-                    </th>,
-                    <th
-                      key={`${dateStr}-pm`}
-                      className={cn(
-                        "px-1 py-1 text-center text-[9px] font-semibold uppercase tracking-wider border-b border-slate-200 border-r-2 border-r-slate-300 min-w-[80px]",
-                        baseBg,
-                        "text-slate-500"
-                      )}
-                    >
-                      PM
-                    </th>,
-                ];
-              })}
-            </tr>
           </thead>
 
           <tbody>
-            {sites.map((site) => {
-              return (
-                <Fragment key={`site-${site.id_site}`}>
-                  {/* ───── Site header ───── */}
-                  <tr>
-                    <td className={cn(
-                      "sticky left-0 z-10 border-b border-r border-slate-200 px-5 py-1.5",
-                      COL1,
-                      "bg-slate-100"
-                    )}>
-                      <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-                        {site.name}
-                      </span>
-                    </td>
-                    <td
-                      colSpan={days.length * 2}
-                      className="border-b border-slate-200 bg-slate-100"
-                    />
-                  </tr>
+            {sites.map((site) => (
+              <Fragment key={`site-${site.id_site}`}>
+                {/* Site header */}
+                <tr>
+                  <td className={cn(
+                    "sticky left-0 z-10 border-b border-r border-slate-200 px-4 py-1.5",
+                    COL1,
+                    "bg-slate-100"
+                  )}>
+                    <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                      {site.name}
+                    </span>
+                  </td>
+                  <td
+                    colSpan={days.length}
+                    className="border-b border-slate-200 bg-slate-100"
+                  />
+                </tr>
 
-                  {/* ───── Department rows ───── */}
-                  {site.departments.map((dept, deptIndex) => {
-                    const isEvenRow = deptIndex % 2 === 0;
-                    const stickyBg = isEvenRow ? "bg-white" : "bg-slate-50";
+                {/* Department rows */}
+                {site.departments.map((dept, deptIndex) => {
+                  const isEvenRow = deptIndex % 2 === 0;
+                  const stickyBg = isEvenRow ? "bg-white" : "bg-slate-50";
 
-                    return (
-                      <tr
-                        key={`dept-${dept.id_department}`}
-                        className={cn("border-b border-slate-100", stickyBg)}
-                      >
-                        {/* Department name */}
-                        <td className={cn(
-                          "sticky left-0 z-10 border-r border-slate-200 px-5 py-2.5",
-                          COL1,
-                          stickyBg
-                        )}>
-                          <span className="text-[13px] font-medium text-slate-700 whitespace-nowrap">
-                            {dept.name}
-                          </span>
-                        </td>
+                  return (
+                    <tr
+                      key={`dept-${dept.id_department}`}
+                      className={cn("border-b border-slate-100", stickyBg)}
+                    >
+                      <td className={cn(
+                        "sticky left-0 z-10 border-r border-slate-200 px-4 py-2",
+                        COL1,
+                        stickyBg
+                      )}>
+                        <span className="text-[13px] font-medium text-slate-700 whitespace-nowrap">
+                          {dept.name}
+                        </span>
+                      </td>
 
-                        {/* Day cells — 2 sub-cells per day (AM + PM) */}
-                        {dept.days.map((day, dayIdx) => {
-                          const date = parseISO(day.date);
-                          const isMon = isMonday(date);
-                          const today = isToday(date);
-                          const isOddDay = dayIdx % 2 === 1;
+                      {dept.days.map((day, dayIdx) => {
+                        const date = parseISO(day.date);
+                        const isMon = isMonday(date);
+                        const today = isToday(date);
+                        const isOddDay = dayIdx % 2 === 1;
 
-                          const amAssignments = day.am.blocks.flatMap((b) => b.assignments);
-                          const pmAssignments = day.pm.blocks.flatMap((b) => b.assignments);
+                        const am = day.am.blocks.flatMap((b) => b.assignments);
+                        const pm = day.pm.blocks.flatMap((b) => b.assignments);
+                        const merged = mergeAssignments(am, pm);
 
-                          const cellBg = today
-                            ? "bg-sky-50"
-                            : isOddDay
-                              ? "bg-slate-50"
-                              : undefined;
+                        const cellBg = today
+                          ? "bg-sky-50"
+                          : isOddDay
+                            ? "bg-slate-50"
+                            : undefined;
 
-                          return [
-                              <td
-                                key={`${day.date}-am`}
-                                className={cn(
-                                  "px-1 py-1.5 align-top border-b border-slate-100 border-r border-r-slate-200",
-                                  isMon && dayIdx > 0 && "border-l-[6px] border-l-indigo-400",
-                                  cellBg
-                                )}
-                              >
-                                <PeriodCard assignments={amAssignments} />
-                              </td>,
-                              <td
-                                key={`${day.date}-pm`}
-                                className={cn(
-                                  "px-1 py-1.5 align-top border-b border-slate-100 border-r-2 border-r-slate-300",
-                                  cellBg
-                                )}
-                              >
-                                <PeriodCard assignments={pmAssignments} />
-                              </td>,
-                          ];
-                        })}
-                      </tr>
-                    );
-                  })}
-                </Fragment>
-              );
-            })}
+                        return (
+                          <td
+                            key={day.date}
+                            className={cn(
+                              "px-1.5 py-1.5 align-top border-b border-slate-100 border-r-2 border-r-slate-300",
+                              isMon && dayIdx > 0 && "border-l-[6px] border-l-indigo-400",
+                              cellBg
+                            )}
+                          >
+                            <DayCard people={merged} />
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                })}
+              </Fragment>
+            ))}
 
-            {/* ───── Absences section ───── */}
+            {/* Absences section */}
             {hasLeaves && (
               <>
                 <tr>
                   <td className={cn(
-                    "sticky left-0 z-10 border-b border-r border-slate-200 px-5 py-1.5",
+                    "sticky left-0 z-10 border-b border-r border-slate-200 px-4 py-1.5",
                     COL1,
                     "bg-red-50"
                   )}>
@@ -283,13 +292,13 @@ export function DepartmentsTableView({ days, sites, leaves = [], onDragEnd }: De
                     </span>
                   </td>
                   <td
-                    colSpan={days.length * 2}
+                    colSpan={days.length}
                     className="border-b border-slate-200 bg-red-50"
                   />
                 </tr>
                 <tr className="border-b border-slate-100">
                   <td className={cn(
-                    "sticky left-0 z-10 border-r border-slate-200 px-5 py-2.5 bg-white",
+                    "sticky left-0 z-10 border-r border-slate-200 px-4 py-2 bg-white",
                     COL1
                   )}>
                     <span className="text-[13px] font-medium text-slate-500 italic whitespace-nowrap">
@@ -302,8 +311,6 @@ export function DepartmentsTableView({ days, sites, leaves = [], onDragEnd }: De
                     const today = isToday(date);
                     const isOddDay = dayIdx % 2 === 1;
                     const dayLeaves = leavesByDay.get(dateStr) ?? [];
-                    const amLeaves = dayLeaves.filter((l) => l.period === null || l.period === "AM");
-                    const pmLeaves = dayLeaves.filter((l) => l.period === null || l.period === "PM");
 
                     const cellBg = today
                       ? "bg-sky-50"
@@ -311,27 +318,18 @@ export function DepartmentsTableView({ days, sites, leaves = [], onDragEnd }: De
                         ? "bg-slate-50"
                         : undefined;
 
-                    return [
+                    return (
                       <td
-                        key={`${dateStr}-abs-am`}
+                        key={dateStr}
                         className={cn(
-                          "px-1 py-1.5 align-top border-b border-slate-100 border-r border-r-slate-200",
+                          "px-1.5 py-1.5 align-top border-b border-slate-100 border-r-2 border-r-slate-300",
                           isMon && dayIdx > 0 && "border-l-[6px] border-l-indigo-400",
                           cellBg
                         )}
                       >
-                        <AbsenceCard leaves={amLeaves} />
-                      </td>,
-                      <td
-                        key={`${dateStr}-abs-pm`}
-                        className={cn(
-                          "px-1 py-1.5 align-top border-b border-slate-100 border-r-2 border-r-slate-300",
-                          cellBg
-                        )}
-                      >
-                        <AbsenceCard leaves={pmLeaves} />
-                      </td>,
-                    ];
+                        <AbsenceCard leaves={dayLeaves} />
+                      </td>
+                    );
                   })}
                 </tr>
               </>
@@ -345,113 +343,171 @@ export function DepartmentsTableView({ days, sites, leaves = [], onDragEnd }: De
 
 // ─── Sub-components ──────────────────────────────────────
 
-/** Single compact card showing all staff for a period cell */
-function PeriodCard({ assignments }: { assignments: PlanningAssignment[] }) {
-  if (assignments.length === 0) {
-    return <div className="min-h-[24px]" />;
+/** Individual chip for a person in the planning grid */
+function PersonChip({ person }: { person: DayPerson }) {
+  const isDoc = person.type === "DOCTOR";
+  const tag = ROLE_TAG[person.roleId ?? 1];
+  const initials = getInitials(person.firstname, person.lastname);
+
+  const periodAccent =
+    person.period === "AM"
+      ? "border-l-[3px] border-l-amber-400"
+      : person.period === "PM"
+        ? "border-l-[3px] border-l-violet-400"
+        : "";
+
+  const baseColors = isDoc
+    ? "bg-sky-50 border-sky-200 text-sky-800 hover:bg-sky-100"
+    : "bg-emerald-50 border-emerald-200 text-emerald-800 hover:bg-emerald-100";
+
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-0.5 h-6 rounded-md px-1.5",
+        "border text-[11px] font-semibold leading-none",
+        "transition-colors duration-100 cursor-default",
+        "shadow-[0_1px_2px_rgba(0,0,0,0.04)]",
+        baseColors,
+        periodAccent,
+      )}
+      title={`${person.firstname} ${person.lastname} — ${
+        person.period === "FULL" ? "Journée" : person.period === "AM" ? "Matin" : "Après-midi"
+      }`}
+    >
+      <span>{initials}</span>
+      {tag && (
+        <span className="text-[9px] font-bold opacity-60">{tag}</span>
+      )}
+    </span>
+  );
+}
+
+/** Absence chip for a person */
+function AbsenceChip({ leave }: { leave: { id_staff: number; firstname: string; lastname: string; position: number; period: "AM" | "PM" | null } }) {
+  const initials = getInitials(leave.firstname, leave.lastname);
+
+  const periodAccent =
+    leave.period === "AM"
+      ? "border-l-[3px] border-l-amber-400"
+      : leave.period === "PM"
+        ? "border-l-[3px] border-l-violet-400"
+        : "";
+
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center h-6 rounded-md px-1.5",
+        "border text-[11px] font-semibold leading-none",
+        "transition-colors duration-100 cursor-default",
+        "shadow-[0_1px_2px_rgba(0,0,0,0.04)]",
+        "bg-red-50 border-red-200 text-red-600 hover:bg-red-100",
+        periodAccent,
+      )}
+      title={`${leave.firstname} ${leave.lastname} — Absent${
+        leave.period === null ? " (Journée)" : leave.period === "AM" ? " (Matin)" : " (Après-midi)"
+      }`}
+    >
+      {initials}
+    </span>
+  );
+}
+
+/** Day cell content: chips grouped by type with subtle divider */
+function DayCard({ people }: { people: DayPerson[] }) {
+  if (people.length === 0) {
+    return <div className="min-h-[28px]" />;
   }
 
-  const doctors = assignments.filter((a) => a.assignment_type === "DOCTOR");
-  const secretaries = assignments.filter((a) => a.assignment_type === "SECRETARY");
+  const doctors = people.filter((p) => p.type === "DOCTOR");
+  const secretaries = people.filter((p) => p.type === "SECRETARY");
 
   return (
     <div className="relative group/card">
-      <div className="rounded-md border border-slate-200 bg-white px-1.5 py-1 min-h-[24px] hover:border-slate-300 transition-colors">
-        {/* Doctors line */}
+      <div className="flex flex-col gap-0.5 min-h-[28px]">
         {doctors.length > 0 && (
-          <div className="flex flex-wrap gap-x-1 items-baseline">
-            {doctors.map((a) => (
-              <span
-                key={a.id_staff}
-                className="text-[11px] font-semibold text-sky-700 leading-tight"
-              >
-                {getInitials(a.firstname, a.lastname)}
-              </span>
+          <div className="flex flex-wrap gap-1 items-center">
+            {doctors.map((p) => (
+              <PersonChip key={p.id_staff} person={p} />
             ))}
           </div>
         )}
-        {/* Secretaries line */}
+        {doctors.length > 0 && secretaries.length > 0 && (
+          <div className="h-px bg-slate-200/60 mx-1" />
+        )}
         {secretaries.length > 0 && (
-          <div className="flex flex-wrap gap-x-1 items-baseline">
-            {secretaries.map((a) => {
-              const tag = ROLE_TAG[a.id_role ?? 1];
-              return (
-                <span
-                  key={a.id_staff}
-                  className="text-[11px] font-medium text-emerald-700 leading-tight"
-                >
-                  {getInitials(a.firstname, a.lastname)}
-                  {tag && (
-                    <span className="text-[9px] text-emerald-500 ml-px">{tag}</span>
-                  )}
-                </span>
-              );
-            })}
+          <div className="flex flex-wrap gap-1 items-center">
+            {secretaries.map((p) => (
+              <PersonChip key={p.id_staff} person={p} />
+            ))}
           </div>
         )}
       </div>
 
-      {/* Hover tooltip with full names */}
-      {assignments.length > 0 && (
-        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 rounded-lg bg-slate-800 text-white text-xs shadow-xl opacity-0 pointer-events-none group-hover/card:opacity-100 transition-opacity duration-150 z-50 whitespace-nowrap">
-          {doctors.length > 0 && (
-            <div>
-              <div className="text-sky-300 font-semibold text-[10px] uppercase tracking-wide mb-0.5">Médecins</div>
-              {doctors.map((a) => (
-                <div key={a.id_staff} className="text-sm">{a.firstname} {a.lastname}</div>
-              ))}
-            </div>
-          )}
-          {doctors.length > 0 && secretaries.length > 0 && (
-            <div className="border-t border-slate-600 my-1" />
-          )}
-          {secretaries.length > 0 && (
-            <div>
-              <div className="text-emerald-300 font-semibold text-[10px] uppercase tracking-wide mb-0.5">Secrétaires</div>
-              {secretaries.map((a) => {
-                const tag = ROLE_TAG[a.id_role ?? 1];
-                return (
-                  <div key={a.id_staff} className="text-sm">
-                    {a.firstname} {a.lastname}
-                    {tag && <span className="text-slate-400 ml-1">({tag})</span>}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-          <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px border-4 border-transparent border-t-slate-800" />
-        </div>
-      )}
+      {/* Hover tooltip */}
+      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 rounded-lg bg-slate-800 text-white text-xs shadow-xl opacity-0 pointer-events-none group-hover/card:opacity-100 transition-opacity duration-150 z-50 whitespace-nowrap">
+        {doctors.length > 0 && (
+          <div>
+            <div className="text-sky-300 font-semibold text-[10px] uppercase tracking-wide mb-0.5">Médecins</div>
+            {doctors.map((p) => (
+              <div key={p.id_staff} className="text-sm">
+                {p.firstname} {p.lastname}
+                <span className="text-slate-400 ml-1.5">
+                  {p.period === "FULL" ? "Journée" : p.period === "AM" ? "Matin" : "Après-midi"}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+        {doctors.length > 0 && secretaries.length > 0 && (
+          <div className="border-t border-slate-600 my-1" />
+        )}
+        {secretaries.length > 0 && (
+          <div>
+            <div className="text-emerald-300 font-semibold text-[10px] uppercase tracking-wide mb-0.5">Secrétaires</div>
+            {secretaries.map((p) => {
+              const tag = ROLE_TAG[p.roleId ?? 1];
+              return (
+                <div key={p.id_staff} className="text-sm">
+                  {p.firstname} {p.lastname}
+                  {tag && <span className="text-slate-500 ml-1">({tag})</span>}
+                  <span className="text-slate-400 ml-1.5">
+                    {p.period === "FULL" ? "Journée" : p.period === "AM" ? "Matin" : "Après-midi"}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px border-4 border-transparent border-t-slate-800" />
+      </div>
     </div>
   );
 }
 
-/** Compact card for absent staff in a period */
+/** Compact card for absent staff in a day */
 function AbsenceCard({ leaves }: { leaves: { id_staff: number; firstname: string; lastname: string; position: number; period: "AM" | "PM" | null }[] }) {
   if (leaves.length === 0) {
-    return <div className="min-h-[24px]" />;
+    return <div className="min-h-[28px]" />;
   }
 
   return (
     <div className="relative group/abs">
-      <div className="rounded-md border border-red-200 bg-red-50 px-1.5 py-1 min-h-[24px] hover:border-red-300 transition-colors">
-        <div className="flex flex-wrap gap-x-1 items-baseline">
-          {leaves.map((l) => (
-            <span
-              key={l.id_staff}
-              className="text-[11px] font-medium text-red-600 leading-tight"
-            >
-              {getInitials(l.firstname, l.lastname)}
-            </span>
-          ))}
-        </div>
+      <div className="flex flex-wrap gap-1 items-center min-h-[28px]">
+        {leaves.map((l) => (
+          <AbsenceChip key={l.id_staff} leave={l} />
+        ))}
       </div>
 
       {/* Hover tooltip */}
       <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 rounded-lg bg-slate-800 text-white text-xs shadow-xl opacity-0 pointer-events-none group-hover/abs:opacity-100 transition-opacity duration-150 z-50 whitespace-nowrap">
         <div className="text-red-300 font-semibold text-[10px] uppercase tracking-wide mb-0.5">Absents</div>
         {leaves.map((l) => (
-          <div key={l.id_staff} className="text-sm">{l.firstname} {l.lastname}</div>
+          <div key={l.id_staff} className="text-sm">
+            {l.firstname} {l.lastname}
+            <span className="text-slate-400 ml-1.5">
+              {l.period === null ? "Journée" : l.period === "AM" ? "Matin" : "Après-midi"}
+            </span>
+          </div>
         ))}
         <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px border-4 border-transparent border-t-slate-800" />
       </div>
