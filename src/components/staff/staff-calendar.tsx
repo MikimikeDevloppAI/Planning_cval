@@ -13,6 +13,7 @@ import {
   addMonths,
   subMonths,
   parseISO,
+  isWeekend,
 } from "date-fns";
 import { fr } from "date-fns/locale";
 import { ChevronLeft, ChevronRight } from "lucide-react";
@@ -85,10 +86,10 @@ export function StaffCalendar({ assignments, leaves }: StaffCalendarProps) {
   }, [leaves]);
 
   const getRoleColor = (roleId: number | null, type: string) => {
-    if (type === "DOCTOR") return "bg-[#aecbfa]";
-    if (roleId === 1) return "bg-[#a8dab5]";
-    if (roleId === 2) return "bg-[#f5a3ab]";
-    if (roleId === 3) return "bg-[#f9cb80]";
+    if (type === "DOCTOR") return "bg-sky-200";
+    if (roleId === 1) return "bg-emerald-200";
+    if (roleId === 2) return "bg-pink-200";
+    if (roleId === 3) return "bg-amber-200";
     return "bg-muted-foreground/30";
   };
 
@@ -97,21 +98,27 @@ export function StaffCalendar({ assignments, leaves }: StaffCalendarProps) {
   return (
     <div>
       {/* Month navigation */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-center gap-4 mb-4">
         <button
           onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
-          className="p-1 rounded-lg hover:bg-muted/50 transition-colors"
+          className="p-1.5 rounded-lg hover:bg-muted/50 transition-colors"
         >
           <ChevronLeft className="w-5 h-5 text-muted-foreground" />
         </button>
-        <h4 className="text-sm font-semibold text-foreground capitalize">
+        <h4 className="text-sm font-semibold text-foreground capitalize min-w-[140px] text-center">
           {format(currentMonth, "MMMM yyyy", { locale: fr })}
         </h4>
         <button
           onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
-          className="p-1 rounded-lg hover:bg-muted/50 transition-colors"
+          className="p-1.5 rounded-lg hover:bg-muted/50 transition-colors"
         >
           <ChevronRight className="w-5 h-5 text-muted-foreground" />
+        </button>
+        <button
+          onClick={() => setCurrentMonth(new Date())}
+          className="text-xs text-primary hover:text-primary/80 font-medium px-2.5 py-1 rounded-lg hover:bg-primary/5 transition-colors"
+        >
+          Aujourd&apos;hui
         </button>
       </div>
 
@@ -120,7 +127,7 @@ export function StaffCalendar({ assignments, leaves }: StaffCalendarProps) {
         {["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"].map((d) => (
           <div
             key={d}
-            className="text-center text-xs font-medium text-muted-foreground py-1"
+            className="text-center text-xs font-medium text-muted-foreground py-1.5"
           >
             {d}
           </div>
@@ -132,7 +139,8 @@ export function StaffCalendar({ assignments, leaves }: StaffCalendarProps) {
         {days.map((day) => {
           const dateStr = format(day, "yyyy-MM-dd");
           const isCurrentMonth = isSameMonth(day, currentMonth);
-          const isToday = isSameDay(day, today);
+          const isTodayDate = isSameDay(day, today);
+          const isWe = isWeekend(day);
           const dayAssignments = assignmentsByDate.get(dateStr);
           const dayLeaves = leavesByDate.get(dateStr);
 
@@ -140,15 +148,21 @@ export function StaffCalendar({ assignments, leaves }: StaffCalendarProps) {
             <div
               key={dateStr}
               className={cn(
-                "bg-card min-h-[60px] p-1",
-                !isCurrentMonth && "bg-muted/30"
+                "bg-card min-h-[72px] p-1.5",
+                !isCurrentMonth && "bg-muted/30",
+                isWe && isCurrentMonth && "bg-muted/15",
+                isTodayDate && "ring-2 ring-primary/30 ring-inset"
               )}
             >
               <div
                 className={cn(
-                  "text-xs font-medium mb-0.5 text-right",
-                  isCurrentMonth ? "text-foreground" : "text-border",
-                  isToday &&
+                  "text-xs font-medium mb-1 text-right",
+                  isCurrentMonth
+                    ? isWe
+                      ? "text-muted-foreground"
+                      : "text-foreground"
+                    : "text-border",
+                  isTodayDate &&
                     "bg-primary text-primary-foreground w-5 h-5 rounded-full flex items-center justify-center ml-auto"
                 )}
               >
@@ -160,20 +174,26 @@ export function StaffCalendar({ assignments, leaves }: StaffCalendarProps) {
                 {/* AM */}
                 {(dayAssignments?.am.length || dayLeaves?.am) && (
                   <div className="flex items-center gap-0.5">
-                    <span className="text-[8px] text-muted-foreground w-3">AM</span>
+                    <span className="text-[8px] text-muted-foreground w-3 shrink-0">AM</span>
                     {dayLeaves?.am ? (
-                      <div className="flex-1 h-3 bg-destructive/10 rounded-sm border border-destructive/20" />
+                      <div className="flex-1 h-4 bg-destructive/10 rounded-sm border border-destructive/20 flex items-center justify-center">
+                        <span className="text-[7px] font-medium text-destructive">Absent</span>
+                      </div>
                     ) : (
                       <div className="flex gap-0.5 flex-1">
                         {dayAssignments?.am.map((a) => (
                           <div
                             key={a.id_assignment}
                             className={cn(
-                              "h-3 rounded-sm flex-1 max-w-[12px]",
+                              "h-4 rounded-sm flex-1 flex items-center justify-center",
                               getRoleColor(a.id_role, a.assignment_type)
                             )}
-                            title={`${a.work_blocks?.departments?.name ?? ""} - ${a.secretary_roles?.name ?? a.assignment_type}`}
-                          />
+                            title={`${a.work_blocks?.departments?.name ?? ""} — ${a.secretary_roles?.name ?? a.assignment_type}`}
+                          >
+                            <span className="text-[7px] font-bold text-foreground/70 truncate px-0.5">
+                              {a.work_blocks?.departments?.name?.slice(0, 4) ?? ""}
+                            </span>
+                          </div>
                         ))}
                       </div>
                     )}
@@ -182,20 +202,26 @@ export function StaffCalendar({ assignments, leaves }: StaffCalendarProps) {
                 {/* PM */}
                 {(dayAssignments?.pm.length || dayLeaves?.pm) && (
                   <div className="flex items-center gap-0.5">
-                    <span className="text-[8px] text-muted-foreground w-3">PM</span>
+                    <span className="text-[8px] text-muted-foreground w-3 shrink-0">PM</span>
                     {dayLeaves?.pm ? (
-                      <div className="flex-1 h-3 bg-destructive/10 rounded-sm border border-destructive/20" />
+                      <div className="flex-1 h-4 bg-destructive/10 rounded-sm border border-destructive/20 flex items-center justify-center">
+                        <span className="text-[7px] font-medium text-destructive">Absent</span>
+                      </div>
                     ) : (
                       <div className="flex gap-0.5 flex-1">
                         {dayAssignments?.pm.map((a) => (
                           <div
                             key={a.id_assignment}
                             className={cn(
-                              "h-3 rounded-sm flex-1 max-w-[12px]",
+                              "h-4 rounded-sm flex-1 flex items-center justify-center",
                               getRoleColor(a.id_role, a.assignment_type)
                             )}
-                            title={`${a.work_blocks?.departments?.name ?? ""} - ${a.secretary_roles?.name ?? a.assignment_type}`}
-                          />
+                            title={`${a.work_blocks?.departments?.name ?? ""} — ${a.secretary_roles?.name ?? a.assignment_type}`}
+                          >
+                            <span className="text-[7px] font-bold text-foreground/70 truncate px-0.5">
+                              {a.work_blocks?.departments?.name?.slice(0, 4) ?? ""}
+                            </span>
+                          </div>
                         ))}
                       </div>
                     )}
@@ -208,24 +234,24 @@ export function StaffCalendar({ assignments, leaves }: StaffCalendarProps) {
       </div>
 
       {/* Legend */}
-      <div className="flex flex-wrap items-center gap-3 mt-3 text-xs text-muted-foreground">
-        <div className="flex items-center gap-1">
-          <div className="w-3 h-3 rounded-sm bg-[#aecbfa]" />
+      <div className="flex flex-wrap items-center gap-3 mt-3 bg-muted/30 rounded-lg p-2.5 text-xs text-muted-foreground">
+        <div className="flex items-center gap-1.5">
+          <div className="w-3 h-3 rounded-sm bg-sky-200" />
           Médecin
         </div>
-        <div className="flex items-center gap-1">
-          <div className="w-3 h-3 rounded-sm bg-[#a8dab5]" />
+        <div className="flex items-center gap-1.5">
+          <div className="w-3 h-3 rounded-sm bg-emerald-200" />
           Standard
         </div>
-        <div className="flex items-center gap-1">
-          <div className="w-3 h-3 rounded-sm bg-[#f5a3ab]" />
+        <div className="flex items-center gap-1.5">
+          <div className="w-3 h-3 rounded-sm bg-pink-200" />
           Fermeture
         </div>
-        <div className="flex items-center gap-1">
-          <div className="w-3 h-3 rounded-sm bg-[#f9cb80]" />
+        <div className="flex items-center gap-1.5">
+          <div className="w-3 h-3 rounded-sm bg-amber-200" />
           Aide ferm.
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1.5">
           <div className="w-3 h-3 rounded-sm bg-destructive/10 border border-destructive/20" />
           Absence
         </div>

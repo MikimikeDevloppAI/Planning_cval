@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useEffect, useRef, useState } from "react";
+import { useMemo, useEffect, useRef, useState, useCallback } from "react";
 import { format, isToday, isMonday, parseISO } from "date-fns";
 import { fr } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -11,13 +11,18 @@ import type { PlanningSite, PlanningAssignment } from "@/lib/types/database";
 type FilterType = "tous" | "medecins" | "secretaires";
 
 /** Fixed width for the first column */
-const COL1 = "w-[220px] min-w-[220px] max-w-[220px]";
+const COL1 = "w-[200px] min-w-[200px] max-w-[200px]";
 
-/** Role id → short tag (role 1 = Standard, no tag) */
-const ROLE_TAG: Record<number, string> = {
-  2: "1f",
-  3: "2f",
-};
+/** Border-left for week separators */
+function weekSepStyle(isWkStart: boolean, isFirstCol: boolean): React.CSSProperties | undefined {
+  if (isWkStart && !isFirstCol) {
+    return { borderLeft: "2px solid rgb(203 213 225)" };
+  }
+  return undefined;
+}
+
+/** Role id → short tag */
+const ROLE_TAG: Record<number, string> = { 2: "1f", 3: "2f" };
 
 /** Abbreviate known site names */
 const SITE_ABBREV: Record<string, string> = {
@@ -26,10 +31,11 @@ const SITE_ABBREV: Record<string, string> = {
 };
 
 function abbreviateSite(name: string): string {
-  const key = name.toLowerCase().trim();
-  if (SITE_ABBREV[key]) return SITE_ABBREV[key];
-  // Fallback: first 4 chars uppercase
-  return name.slice(0, 4).toUpperCase();
+  return SITE_ABBREV[name.toLowerCase().trim()] ?? name.slice(0, 4).toUpperCase();
+}
+
+function abbreviateDept(name: string): string {
+  return name.length <= 10 ? name : name.slice(0, 9) + ".";
 }
 
 interface LeaveEntry {
@@ -74,6 +80,8 @@ const periodLabels: Record<string, string> = {
   FULL: "Journée",
 };
 
+const PERIOD_ORDER: Record<string, number> = { AM: 0, FULL_DAY: 1, PM: 2 };
+
 export function CollaborateursTableView({
   days,
   sites,
@@ -81,8 +89,13 @@ export function CollaborateursTableView({
 }: CollaborateursTableViewProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [filter, setFilter] = useState<FilterType>("tous");
+  const [highlightedId, setHighlightedId] = useState<number | null>(null);
 
-  // Build a lookup: staffId → Map of date → leave period
+  const toggleHighlight = useCallback((id: number) => {
+    setHighlightedId((prev) => (prev === id ? null : id));
+  }, []);
+
+  // Build leave lookup: staffId → Map<date, period>
   const leaveIndex = useMemo(() => {
     const index = new Map<number, Map<string, "AM" | "PM" | "FULL">>();
     for (const leave of leaves) {
@@ -94,7 +107,7 @@ export function CollaborateursTableView({
           if (leave.period === null) {
             staffLeaves.set(d, "FULL");
           } else if (existing === "FULL") {
-            // already full day, keep it
+            // keep
           } else if (existing && existing !== leave.period) {
             staffLeaves.set(d, "FULL");
           } else {
@@ -110,6 +123,9 @@ export function CollaborateursTableView({
     const staffMap = new Map<number, CollaborateurData>();
 
     for (const site of sites) {
+      // Skip Bloc Opératoire virtual site (Oculoplastie, Sédation, etc.)
+      if (site.id_site === -1) continue;
+
       for (const dept of site.departments) {
         for (const day of dept.days) {
           const processBlock = (
@@ -127,9 +143,7 @@ export function CollaborateursTableView({
                 });
               }
               const collab = staffMap.get(a.id_staff)!;
-              if (!collab.days.has(day.date)) {
-                collab.days.set(day.date, []);
-              }
+              if (!collab.days.has(day.date)) collab.days.set(day.date, []);
 
               const existing = collab.days.get(day.date)!;
               const sameDept = existing.find(
@@ -158,17 +172,12 @@ export function CollaborateursTableView({
             }
           };
 
-          for (const block of day.am.blocks) {
-            processBlock(block, "AM");
-          }
-          for (const block of day.pm.blocks) {
-            processBlock(block, "PM");
-          }
+          for (const block of day.am.blocks) processBlock(block, "AM");
+          for (const block of day.pm.blocks) processBlock(block, "PM");
         }
       }
     }
 
-    // Also add staff from leaves who might not have any assignments
     for (const leave of leaves) {
       if (leave.staff && !staffMap.has(leave.id_staff)) {
         staffMap.set(leave.id_staff, {
@@ -189,71 +198,79 @@ export function CollaborateursTableView({
 
   const filteredCollabs = useMemo(() => {
     if (filter === "tous") return collaborateurs;
-    if (filter === "medecins")
-      return collaborateurs.filter((c) => c.position === 1);
+    if (filter === "medecins") return collaborateurs.filter((c) => c.position === 1);
     return collaborateurs.filter((c) => c.position === 2);
   }, [collaborateurs, filter]);
+
+  const weekStartSet = useMemo(() => {
+    const set = new Set<string>();
+    for (let i = 0; i < days.length; i++) {
+      const date = parseISO(days[i]);
+      if (isMonday(date) || i === 0) set.add(days[i]);
+    }
+    return set;
+  }, [days]);
 
   useEffect(() => {
     if (!scrollRef.current) return;
     const todayStr = format(new Date(), "yyyy-MM-dd");
     const todayIndex = days.indexOf(todayStr);
     if (todayIndex >= 0) {
-      scrollRef.current.scrollLeft = Math.max(0, (todayIndex - 2) * 160);
+      scrollRef.current.scrollLeft = Math.max(0, (todayIndex - 2) * 130);
     }
   }, [days]);
 
   return (
-    <div className="flex flex-col h-full gap-3">
+    <div className="flex flex-col h-full gap-2">
       {/* Filter tabs */}
-      <div className="flex items-center gap-2 shrink-0">
+      <div className="flex items-center gap-1 p-1 bg-slate-100/60 rounded-xl shrink-0">
         {(["tous", "medecins", "secretaires"] as FilterType[]).map((f) => (
           <button
             key={f}
             onClick={() => setFilter(f)}
             className={cn(
-              "px-3 py-1.5 rounded-lg text-sm font-medium transition-all",
+              "px-3.5 py-1.5 rounded-lg text-sm font-medium transition-all duration-150",
               filter === f
-                ? "bg-white text-slate-800 ring-1 ring-slate-300 shadow-sm"
-                : "text-slate-500 hover:text-slate-700"
+                ? "bg-white text-slate-800 shadow-sm ring-1 ring-slate-200"
+                : "text-slate-500 hover:text-slate-700 hover:bg-white/50"
             )}
           >
             {f === "tous" ? "Tous" : f === "medecins" ? "Médecins" : "Secrétaires"}
           </button>
         ))}
-        <span className="text-xs text-slate-400 ml-auto">
+        <span className="text-xs text-slate-400 ml-auto tabular-nums font-medium px-2">
           {filteredCollabs.length} collaborateur{filteredCollabs.length !== 1 ? "s" : ""}
         </span>
       </div>
 
       <div
         ref={scrollRef}
-        className="overflow-auto flex-1 rounded-xl border border-slate-200 bg-white"
+        className="overflow-auto flex-1 max-h-full rounded-xl border border-slate-200 bg-white shadow-md"
       >
-        <table className="border-collapse w-max min-w-full">
+        <table className="border-collapse w-max">
           <thead className="sticky top-0 z-30">
             <tr>
               <th className={cn(
-                "sticky left-0 z-40 bg-slate-50 border-b border-r border-slate-200 px-5 py-3 text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wide",
+                "sticky left-0 z-40 bg-slate-50 border-b border-r border-slate-200 px-3 py-2 text-left",
                 COL1
               )}>
-                Collaborateur
+                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
+                  Collaborateur
+                </span>
               </th>
               {days.map((dateStr, dayIdx) => {
                 const date = parseISO(dateStr);
-                const isMon = isMonday(date);
+                const isWkStart = weekStartSet.has(dateStr);
                 const today = isToday(date);
-                const isOdd = dayIdx % 2 === 1;
 
                 return (
                   <th
                     key={dateStr}
                     className={cn(
-                      "px-1 py-2 text-center min-w-[150px] border-b border-r-2 border-r-slate-300",
-                      isOdd ? "bg-slate-50" : "bg-white",
-                      isMon && dayIdx > 0 && "border-l-[6px] border-l-indigo-400",
+                      "px-1 py-2 text-center min-w-[130px] border-b border-r border-slate-200 bg-white",
                       today && "bg-sky-50 border-b-2 border-b-sky-400"
                     )}
+                    style={weekSepStyle(isWkStart, dayIdx === 0)}
                   >
                     <div className="text-[10px] uppercase text-slate-400 font-medium tracking-wide">
                       {format(date, "EEE", { locale: fr })}
@@ -273,37 +290,46 @@ export function CollaborateursTableView({
             </tr>
           </thead>
           <tbody>
-            {filteredCollabs.map((collab, idx) => {
-              const isEven = idx % 2 === 0;
-              const stickyBg = isEven ? "bg-white" : "bg-slate-50";
+            {filteredCollabs.map((collab, collabIdx) => {
               const isDoc = collab.position === 1;
+              const isHighlighted = highlightedId === collab.id_staff;
+              const isEvenRow = collabIdx % 2 === 0;
+              const rowBg = isEvenRow ? "bg-white" : "bg-slate-50";
 
               return (
                 <tr
                   key={collab.id_staff}
-                  className={cn("border-b border-slate-100", stickyBg)}
+                  onClick={() => toggleHighlight(collab.id_staff)}
+                  className={cn(
+                    "border-b border-slate-200 cursor-pointer transition-colors duration-150",
+                    isHighlighted
+                      ? "bg-primary/[0.06]"
+                      : rowBg
+                  )}
                 >
                   <td className={cn(
-                    "sticky left-0 z-10 border-r border-slate-200 px-5 py-2",
+                    "sticky left-0 z-10 border-r border-slate-200 px-3 py-1.5",
                     COL1,
-                    stickyBg
+                    isHighlighted
+                      ? "bg-primary/[0.06] border-l-2 border-l-primary"
+                      : rowBg
                   )}>
-                    <div className="flex items-center gap-2.5">
+                    <div className="flex items-center gap-2">
                       <div
                         className={cn(
-                          "w-7 h-7 rounded-md flex items-center justify-center text-[10px] font-bold border",
+                          "w-6 h-6 rounded flex items-center justify-center text-[9px] font-bold shrink-0",
                           isDoc
-                            ? "bg-sky-50 border-sky-400 text-sky-900"
-                            : "bg-emerald-50 border-emerald-400 text-emerald-900"
+                            ? "bg-sky-100 text-sky-700"
+                            : "bg-emerald-100 text-emerald-700"
                         )}
                       >
                         {getInitials(collab.firstname, collab.lastname)}
                       </div>
-                      <div>
-                        <div className="text-[13px] font-medium text-slate-700 whitespace-nowrap">
+                      <div className="min-w-0">
+                        <div className="text-[12px] font-medium text-slate-700 truncate">
                           {collab.lastname} {collab.firstname}
                         </div>
-                        <div className="text-[10px] text-slate-400">
+                        <div className="text-[9px] text-slate-400 leading-none">
                           {POSITION_LABELS[collab.position] ?? "Autre"}
                         </div>
                       </div>
@@ -312,50 +338,85 @@ export function CollaborateursTableView({
 
                   {days.map((dateStr, dayIdx) => {
                     const date = parseISO(dateStr);
-                    const isMon = isMonday(date);
+                    const isWkStart = weekStartSet.has(dateStr);
                     const today = isToday(date);
-                    const isOddDay = dayIdx % 2 === 1;
                     const dayAssignments = collab.days.get(dateStr) ?? [];
                     const leaveType = leaveIndex.get(collab.id_staff)?.get(dateStr);
 
-                    const cellBg = leaveType === "FULL"
-                      ? "bg-red-50"
-                      : today
-                        ? "bg-sky-50"
-                        : isOddDay
-                          ? "bg-slate-50"
-                          : undefined;
+                    const sorted = [...dayAssignments].sort(
+                      (a, b) => (PERIOD_ORDER[a.period] ?? 1) - (PERIOD_ORDER[b.period] ?? 1)
+                    );
 
                     return (
                       <td
                         key={dateStr}
                         className={cn(
-                          "px-1 py-1.5 border-b border-slate-100 border-r-2 border-r-slate-300 align-top",
-                          isMon && dayIdx > 0 && "border-l-[6px] border-l-indigo-400",
-                          cellBg
+                          "px-1 py-1 align-top border-b border-r border-slate-200 min-w-[130px]",
+                          leaveType === "FULL" && "bg-red-50/40",
+                          today && !leaveType && "bg-sky-50/30"
                         )}
+                        style={weekSepStyle(isWkStart, dayIdx === 0)}
                       >
-                        <div className="grid grid-cols-2 gap-0.5 min-h-[28px]">
+                        <div className="flex flex-col gap-0.5 min-h-[28px]">
                           {leaveType && (
-                            <AbsenceBadge
-                              period={leaveType}
-                              isDoctor={isDoc}
-                              fullName={`${collab.firstname} ${collab.lastname}`}
+                            <Badge
+                              label="ABS"
+                              sub={periodLabels[leaveType]}
+                              variant="absence"
+                              period={leaveType === "FULL" ? "FULL_DAY" : leaveType}
+                              tooltip={
+                                <div>
+                                  <div className="font-semibold text-sm">{collab.firstname} {collab.lastname}</div>
+                                  <div className="text-slate-300 mt-0.5">{isDoc ? "Médecin" : "Secrétaire"}</div>
+                                  <div className="flex items-center gap-1.5 mt-1 text-red-300 font-medium">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
+                                    Absent(e) — {periodLabels[leaveType]}
+                                  </div>
+                                </div>
+                              }
                             />
                           )}
-                          {dayAssignments.map((assignment, i) => (
-                            <DeptBadge
-                              key={i}
-                              siteName={assignment.siteName}
-                              deptName={assignment.deptName}
-                              period={assignment.period}
-                              roleName={assignment.roleName}
-                              roleId={assignment.roleId}
-                              blockType={assignment.blockType}
-                              activityName={assignment.activityName}
-                              assignmentType={assignment.assignmentType}
-                            />
-                          ))}
+                          {sorted.map((a, i) => {
+                            const roleTag = a.roleId ? ROLE_TAG[a.roleId] : undefined;
+                            const variant: BadgeVariant =
+                              a.assignmentType === "DOCTOR"
+                                ? "doctor"
+                                : a.blockType === "ADMIN"
+                                  ? "admin"
+                                  : "secretary";
+
+                            return (
+                              <Badge
+                                key={i}
+                                label={abbreviateSite(a.siteName)}
+                                sub={abbreviateDept(a.deptName)}
+                                tag={roleTag}
+                                variant={variant}
+                                period={a.period}
+                                tooltip={
+                                  <div>
+                                    <div className="font-semibold text-sm">{collab.firstname} {collab.lastname}</div>
+                                    <div className="text-slate-300 mt-0.5">{a.siteName}</div>
+                                    <div className="text-slate-400 mt-0.5">{a.deptName}</div>
+                                    <div className="flex items-center gap-1.5 mt-1">
+                                      {(a.period === "AM" || a.period === "FULL_DAY") && (
+                                        <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
+                                      )}
+                                      {(a.period === "PM" || a.period === "FULL_DAY") && (
+                                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                                      )}
+                                      <span className="text-slate-300">{periodLabels[a.period]}</span>
+                                    </div>
+                                    {a.roleName && (
+                                      <div className="text-slate-400 mt-0.5 text-[10px]">
+                                        Rôle : {a.roleName}
+                                      </div>
+                                    )}
+                                  </div>
+                                }
+                              />
+                            );
+                          })}
                         </div>
                       </td>
                     );
@@ -370,114 +431,72 @@ export function CollaborateursTableView({
   );
 }
 
-// ─── Sub-components ──────────────────────────────────────
+// ─── Badge component ──────────────────────────────────────
 
-/** Abbreviate dept name to keep badges compact */
-function abbreviateDept(name: string): string {
-  if (name.length <= 8) return name;
-  return name.slice(0, 7) + ".";
-}
+type BadgeVariant = "doctor" | "secretary" | "admin" | "absence";
 
-const PERIOD_COLORS = {
-  AM: "bg-amber-50 border-amber-300 text-amber-900 hover:bg-amber-100",
-  PM: "bg-violet-50 border-violet-300 text-violet-900 hover:bg-violet-100",
-  FULL_DAY: "bg-slate-50 border-slate-300 text-slate-800 hover:bg-slate-100",
+const VARIANT_STYLES: Record<BadgeVariant, { base: string }> = {
+  doctor: {
+    base: "chip-doctor text-slate-700",
+  },
+  secretary: {
+    base: "chip-secretary text-slate-700",
+  },
+  admin: {
+    base: "chip-secretary text-slate-700",
+  },
+  absence: {
+    base: "chip-absence text-rose-400",
+  },
 };
 
-function DeptBadge({
-  siteName,
-  deptName,
+function Badge({
+  label,
+  sub,
+  tag,
+  variant = "admin",
   period,
-  roleName,
-  roleId,
-  blockType,
-  activityName,
+  tooltip,
 }: {
-  siteName: string;
-  deptName: string;
+  label: string;
+  sub: string;
+  tag?: string;
+  variant?: BadgeVariant;
   period: "AM" | "PM" | "FULL_DAY";
-  roleName: string | null;
-  roleId: number | null;
-  blockType: string | null;
-  activityName: string | null;
-  assignmentType: string;
+  tooltip: React.ReactNode;
 }) {
-  const isSurgery = blockType === "SURGERY";
-  const roleTag = roleId ? ROLE_TAG[roleId] : undefined;
-  const siteAbbrev = abbreviateSite(siteName);
-  const deptAbbrev = abbreviateDept(deptName);
-
-  const colors = isSurgery
-    ? "bg-indigo-50 border-indigo-300 text-indigo-900 hover:bg-indigo-100"
-    : PERIOD_COLORS[period];
+  const isAM = period === "AM";
+  const isPM = period === "PM";
+  const isFullDay = period === "FULL_DAY";
+  const styles = VARIANT_STYLES[variant];
 
   return (
-    <div className="relative group/dept">
+    <div className="relative group/badge">
       <div
         className={cn(
-          "inline-flex flex-col items-center justify-center min-w-[52px] rounded-md px-1.5 py-0.5",
-          "border transition-all duration-150 cursor-default",
-          colors
+          "relative flex items-center gap-1 h-6 rounded-lg overflow-hidden",
+          "text-[10px] font-semibold leading-none",
+          "transition-all duration-200",
+          styles.base,
+          isFullDay ? "w-full px-2" : "w-[110px]",
+          isAM && "pl-2.5 pr-1.5",
+          isPM && "pl-1.5 pr-2.5",
         )}
       >
-        <span className="text-[10px] font-bold leading-tight">{siteAbbrev}</span>
-        <span className="text-[9px] font-medium leading-tight opacity-70">
-          {deptAbbrev}
-          {roleTag && <span className="ml-0.5 font-bold">{roleTag}</span>}
-        </span>
+        {isAM && (
+          <span className="absolute left-0 top-1 bottom-1 w-[2.5px] rounded-r-full bg-blue-400/60" />
+        )}
+        {isPM && (
+          <span className="absolute right-0 top-1 bottom-1 w-[2.5px] rounded-l-full bg-amber-400/60" />
+        )}
+        <span className="font-bold shrink-0">{label}</span>
+        <span className="opacity-60 truncate">{sub}</span>
+        {tag && <span className="font-bold opacity-50 ml-auto shrink-0">{tag}</span>}
       </div>
 
-      {/* Rich hover tooltip */}
-      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 rounded-lg bg-slate-800 text-white text-xs shadow-xl opacity-0 pointer-events-none group-hover/dept:opacity-100 transition-opacity duration-150 z-50 whitespace-nowrap">
-        <div className="font-semibold text-sm">{siteName}</div>
-        <div className="text-slate-300 mt-0.5">{deptName}</div>
-        {isSurgery && activityName && (
-          <div className="text-indigo-300 mt-0.5">{activityName}</div>
-        )}
-        <div className="text-slate-300 mt-0.5">{periodLabels[period]}</div>
-        {roleName && (
-          <div className="text-slate-400 mt-0.5">Rôle : {roleName}</div>
-        )}
-        <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px border-4 border-transparent border-t-slate-800" />
-      </div>
-    </div>
-  );
-}
-
-function AbsenceBadge({
-  period,
-  isDoctor,
-  fullName,
-}: {
-  period: "AM" | "PM" | "FULL";
-  isDoctor: boolean;
-  fullName: string;
-}) {
-  const positionLabel = isDoctor ? "Médecin" : "Secrétaire";
-
-  return (
-    <div className="relative group/abs">
-      <div
-        className={cn(
-          "inline-flex flex-col items-center justify-center min-w-[52px] rounded-md px-1.5 py-0.5",
-          "border transition-all duration-150 cursor-default",
-          "bg-red-50 border-red-300 text-red-700 hover:bg-red-100",
-        )}
-      >
-        <span className="text-[10px] font-bold leading-tight">ABS</span>
-        <span className="text-[9px] font-medium leading-tight opacity-70">
-          {periodLabels[period]}
-        </span>
-      </div>
-
-      {/* Rich hover tooltip */}
-      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 rounded-lg bg-slate-800 text-white text-xs shadow-xl opacity-0 pointer-events-none group-hover/abs:opacity-100 transition-opacity duration-150 z-50 whitespace-nowrap">
-        <div className="font-semibold text-sm">{fullName}</div>
-        <div className="text-slate-300 mt-0.5">{positionLabel}</div>
-        <div className="flex items-center gap-1.5 mt-1 text-red-300 font-medium">
-          <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
-          Absent(e) — {periodLabels[period]}
-        </div>
+      {/* Tooltip */}
+      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 rounded-lg bg-slate-800 text-white text-xs shadow-xl opacity-0 pointer-events-none group-hover/badge:opacity-100 transition-opacity duration-150 z-50 whitespace-nowrap">
+        {tooltip}
         <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px border-4 border-transparent border-t-slate-800" />
       </div>
     </div>

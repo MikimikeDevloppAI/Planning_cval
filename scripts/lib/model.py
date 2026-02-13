@@ -630,7 +630,37 @@ def solve_model(model, x, y, data, meta, time_limit=30, verbose=False):
                 }
             )
 
+    # Post-processing: link surgery secretaries to doctors
+    _link_surgery_secretaries(result, data)
+
     return result
+
+
+def _link_surgery_secretaries(result, data):
+    """For surgery secretary assignments, set id_linked_doctor to the doctor
+    assignment in the same block whose id_activity requires the matching skill."""
+
+    doctor_activities = data.get("doctor_activities", [])
+    if not doctor_activities:
+        return
+
+    # Build mapping: (id_block, id_skill) -> id_assignment (doctor)
+    # If multiple doctors have the same skill in the same block, pick the first
+    block_skill_to_doctor = {}
+    for da in doctor_activities:
+        key = (da["id_block"], da["id_skill"])
+        if key not in block_skill_to_doctor:
+            block_skill_to_doctor[key] = da["id_assignment"]
+
+    for a in result["assignments"]:
+        if a.get("block_type") != "SURGERY":
+            continue
+        id_skill = a.get("id_skill")
+        if id_skill is None:
+            continue
+        doctor_id = block_skill_to_doctor.get((a["id_block"], id_skill))
+        if doctor_id:
+            a["id_linked_doctor"] = doctor_id
 
 
 def _to_date(val) -> date:

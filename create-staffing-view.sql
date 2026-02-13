@@ -3,7 +3,7 @@
 -- 4 chemins : consultation tier, obstétricienne seule, samedi, surgery
 -- ============================================================
 
-DROP VIEW IF EXISTS v_staffing_needs;
+DROP VIEW IF EXISTS v_staffing_needs CASCADE;
 
 CREATE OR REPLACE VIEW v_staffing_needs AS
 
@@ -112,7 +112,8 @@ saturday_needs AS (
   WHERE c.day_of_week = 'SAT'
 ),
 
--- Path D: SURGERY → activity_requirements via work_blocks.id_activity
+-- Path D: SURGERY → activity_requirements via assignments.id_activity
+-- L'activité chirurgicale est sur l'assignment DOCTOR, pas sur le work_block
 surgery_needs AS (
   SELECT
     wb.id_block, wb.date, wb.period, wb.block_type,
@@ -122,13 +123,27 @@ surgery_needs AS (
     ar.quantity as needed,
     COALESCE(f.assigned, 0)::int as assigned,
     (ar.quantity - COALESCE(f.assigned, 0))::int as gap
-  FROM work_blocks wb
+  FROM (
+    -- Distinct (block, activity) pour éviter le double-comptage
+    -- si 2 médecins ont la même activité dans le même block
+    SELECT DISTINCT a.id_block, a.id_activity
+    FROM assignments a
+    WHERE a.assignment_type = 'DOCTOR'
+      AND a.status NOT IN ('CANCELLED','INVALIDATED')
+      AND a.id_activity IS NOT NULL
+  ) ba
+  JOIN work_blocks wb ON ba.id_block = wb.id_block
   JOIN departments d ON wb.id_department = d.id_department
   JOIN sites si ON d.id_site = si.id_site
-  JOIN activity_requirements ar ON ar.id_activity = wb.id_activity
+  JOIN activity_requirements ar ON ar.id_activity = ba.id_activity
   JOIN skills sk ON ar.id_skill = sk.id_skill
-  LEFT JOIN filled f ON f.id_block = wb.id_block AND f.id_skill = ar.id_skill AND f.id_role IS NOT DISTINCT FROM NULL
-  WHERE wb.block_type = 'SURGERY'
+  LEFT JOIN (
+    SELECT id_block, id_skill, COUNT(*) as assigned
+    FROM assignments
+    WHERE assignment_type = 'SECRETARY'
+      AND status NOT IN ('CANCELLED','INVALIDATED')
+    GROUP BY id_block, id_skill
+  ) f ON f.id_block = wb.id_block AND f.id_skill = ar.id_skill
 )
 
 SELECT * FROM consultation_needs

@@ -75,6 +75,19 @@
   --shadow-soft: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
   --shadow-medium: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
 
+  /* Chip shadows — soft modern SaaS style */
+  --shadow-chip:
+    0 1px 2px 0 rgb(0 0 0 / 0.04),
+    inset 0 1px 0 0 rgb(255 255 255 / 0.6);
+  --shadow-chip-hover:
+    0 4px 12px -2px rgb(0 0 0 / 0.08),
+    0 1px 3px 0 rgb(0 0 0 / 0.04),
+    inset 0 1px 0 0 rgb(255 255 255 / 0.8);
+  --shadow-chip-overlay:
+    0 8px 24px -4px rgb(0 0 0 / 0.12),
+    0 2px 6px 0 rgb(0 0 0 / 0.06),
+    inset 0 1px 0 0 rgb(255 255 255 / 0.8);
+
   /* Radius */
   --radius: 0.5rem;
 }
@@ -97,7 +110,7 @@ body {
 
 /* Smooth transitions globally */
 *, *::before, *::after {
-  transition-property: color, background-color, border-color, box-shadow;
+  transition-property: color, background-color, border-color, box-shadow, transform;
   transition-timing-function: ease;
   transition-duration: 150ms;
 }
@@ -124,4 +137,48 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
   background-color: hsl(220 13% 65%);
+}
+
+/* ── Planning chip classes — Modern glass SaaS style ── */
+
+.chip-doctor {
+  background: #eff6ff;
+  border: 1px solid rgba(147,197,253,0.35);
+  box-shadow: var(--shadow-chip);
+}
+.chip-doctor:hover {
+  background: #dbeafe;
+  border-color: rgba(147,197,253,0.55);
+  box-shadow: var(--shadow-chip-hover);
+  transform: translateY(-1px);
+}
+
+.chip-secretary {
+  background: #ecfdf5;
+  border: 1px solid rgba(134,239,172,0.35);
+  box-shadow: var(--shadow-chip);
+}
+.chip-secretary:hover {
+  background: #dcfce7;
+  border-color: rgba(134,239,172,0.55);
+  box-shadow: var(--shadow-chip-hover);
+  transform: translateY(-1px);
+}
+
+.chip-absence {
+  background: #fff1f2;
+  border: 1px solid rgba(253,164,175,0.35);
+  box-shadow: var(--shadow-chip);
+}
+.chip-absence:hover {
+  background: #ffe4e6;
+  border-color: rgba(253,164,175,0.55);
+  box-shadow: var(--shadow-chip-hover);
+  transform: translateY(-1px);
+}
+
+.chip-overlay {
+  background: linear-gradient(to bottom right, rgba(255,255,255,0.96), rgba(248,250,252,0.92));
+  border: 1px solid rgba(0,0,0,0.06);
+  box-shadow: var(--shadow-chip-overlay);
 }

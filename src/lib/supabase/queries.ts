@@ -10,6 +10,8 @@ import type {
 import {
   startOfMonth,
   endOfMonth,
+  startOfWeek,
+  endOfWeek,
   addDays,
   format,
   getDay,
@@ -197,9 +199,7 @@ export async function fetchStaffList(
 ) {
   let query = supabase
     .from("staff")
-    .select(
-      `*, positions ( name ), staff_secretary_settings ( is_flexible, flexibility_pct, full_day_only, admin_target )`
-    )
+    .select(`*, positions ( name )`)
     .order("lastname");
 
   if (filters?.position) {
@@ -209,7 +209,29 @@ export async function fetchStaffList(
     query = query.eq("is_active", filters.active === "true");
   }
 
-  return throwIfError(await query);
+  const staffRows = throwIfError(await query);
+
+  // Fetch secretary settings separately (avoids PostgREST relationship issue)
+  const settingsRes = await supabase
+    .from("staff_secretary_settings")
+    .select("id_staff, is_flexible, flexibility_pct, full_day_only, admin_target");
+
+  interface SecSettings {
+    id_staff: number;
+    is_flexible: boolean;
+    flexibility_pct: number;
+    full_day_only: boolean;
+    admin_target: number;
+  }
+  const settings = (settingsRes.data ?? []) as SecSettings[];
+  const settingsMap = new Map(settings.map((s) => [s.id_staff, s]));
+
+  // Merge settings into staff rows
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (staffRows as any[]).map((staff) => ({
+    ...staff,
+    staff_secretary_settings: settingsMap.get(staff.id_staff) ?? null,
+  }));
 }
 
 export async function fetchStaffDetail(supabase: SupabaseClient, id: number) {
@@ -232,7 +254,7 @@ export async function fetchStaffDetail(supabase: SupabaseClient, id: number) {
         .select("*, departments ( name ), recurrence_types ( name, cycle_weeks )")
         .eq("id_staff", id)
         .eq("is_active", true)
-        .order("entry_type"),
+        .order("day_of_week"),
       supabase
         .from("assignments")
         .select(
@@ -373,7 +395,7 @@ export async function addStaffLeave(
   staffId: number,
   data: { start_date: string; end_date: string; period?: string | null }
 ) {
-  // 1. Create staff leave
+  // 1. Insert the leave
   const leave = throwIfError(
     await supabase
       .from("staff_leaves")
@@ -387,63 +409,40 @@ export async function addStaffLeave(
       .single()
   );
 
-  // 2. Find conflicting blocks
-  let blockQuery = supabase
-    .from("work_blocks")
-    .select("id_block")
-    .gte("date", data.start_date)
-    .lte("date", data.end_date);
+  // 2. Cancel affected DOCTOR assignments via RPC
+  await supabase.rpc("fn_cancel_assignments_for_leave", {
+    p_staff_id: staffId,
+    p_start_date: data.start_date,
+    p_end_date: data.end_date,
+    p_period: data.period ?? null,
+  });
 
-  if (data.period && data.period !== "FULL_DAY") {
-    blockQuery = blockQuery.eq("period", data.period);
-  }
-
-  const { data: affectedBlocks } = await blockQuery;
-  const blockIds = (affectedBlocks ?? []).map((b: { id_block: number }) => b.id_block);
-
-  if (blockIds.length === 0) {
-    return { leave, invalidated: 0, issues: 0 };
-  }
-
-  // 3. Find conflicting assignments
-  const { data: conflicts } = await supabase
-    .from("assignments")
-    .select("id_assignment, id_block, id_role")
-    .eq("id_staff", staffId)
-    .not("status", "in", "(CANCELLED,INVALIDATED)")
-    .in("id_block", blockIds);
-
-  if (!conflicts || conflicts.length === 0) {
-    return { leave, invalidated: 0, issues: 0 };
-  }
-
-  const conflictIds = conflicts.map((c: { id_assignment: number }) => c.id_assignment);
-
-  // 4. Invalidate conflicting assignments
-  await supabase
-    .from("assignments")
-    .update({ status: "INVALIDATED", updated_at: new Date().toISOString() })
-    .in("id_assignment", conflictIds);
-
-  // 5. Create scheduling issues
-  const issues = conflicts.map(
-    (c: { id_assignment: number; id_block: number; id_role: number | null }) => ({
-      id_block: c.id_block,
-      issue_type: "ABSENCE_CONFLICT",
-      id_assignment: c.id_assignment,
-      id_staff: staffId,
-      id_role: c.id_role,
-      description: `Absence déclarée du ${data.start_date} au ${data.end_date}`,
-    })
-  );
-
-  await supabase.from("scheduling_issues").insert(issues);
-
-  return { leave, invalidated: conflictIds.length, issues: issues.length };
+  return leave;
 }
 
 export async function deleteStaffLeave(supabase: SupabaseClient, leaveId: number) {
-  return throwIfError(await supabase.from("staff_leaves").delete().eq("id_leave", leaveId));
+  // 1. Read the leave to know staff + dates before deleting
+  const leave = throwIfError(
+    await supabase
+      .from("staff_leaves")
+      .select("id_leave, id_staff, start_date, end_date")
+      .eq("id_leave", leaveId)
+      .single()
+  );
+
+  if (!leave) throw new Error(`Leave not found: ${leaveId}`);
+
+  // 2. Delete the leave
+  throwIfError(await supabase.from("staff_leaves").delete().eq("id_leave", leaveId));
+
+  // 3. Restore assignments from recurring schedules via RPC
+  await supabase.rpc("fn_restore_assignments_for_leave", {
+    p_staff_id: leave.id_staff,
+    p_start_date: leave.start_date,
+    p_end_date: leave.end_date,
+  });
+
+  return leave;
 }
 
 // ============================================================
@@ -488,19 +487,22 @@ export async function moveAssignment(
       .eq("id_assignment", params.oldAssignmentId)
   );
 
-  // 2. Create new assignment at target
+  // 2. Upsert new assignment at target (handles CANCELLED row already existing for this block+staff)
   return throwIfError(
     await supabase
       .from("assignments")
-      .insert({
-        id_block: params.targetBlockId,
-        id_staff: params.staffId,
-        assignment_type: params.assignmentType ?? "SECRETARY",
-        id_role: params.roleId ?? null,
-        id_skill: params.skillId ?? null,
-        source: "MANUAL",
-        status: "PROPOSED",
-      })
+      .upsert(
+        {
+          id_block: params.targetBlockId,
+          id_staff: params.staffId,
+          assignment_type: params.assignmentType ?? "SECRETARY",
+          id_role: params.roleId ?? null,
+          id_skill: params.skillId ?? null,
+          source: "MANUAL",
+          status: "PROPOSED",
+        },
+        { onConflict: "id_block,id_staff" }
+      )
       .select()
       .single()
   );
@@ -530,9 +532,95 @@ export async function updateAssignmentStatus(
   );
 }
 
+/**
+ * Move a doctor by writing directly into assignments.
+ * CANCEL the old assignment + INSERT a new one with source='MANUAL'.
+ * No more staff_schedules detour — assignments is the source of truth.
+ */
+export async function moveDoctorSchedule(
+  supabase: SupabaseClient,
+  params: {
+    staffId: number;
+    sourceAssignmentId: number;
+    targetDeptId: number;
+    targetDate: string;
+    period: "AM" | "PM";
+    activityId?: number | null;
+  }
+) {
+  // 1. Cancel old assignment
+  throwIfError(
+    await supabase
+      .from("assignments")
+      .update({ status: "CANCELLED", updated_at: new Date().toISOString() })
+      .eq("id_assignment", params.sourceAssignmentId)
+  );
+
+  // 2. Find the target block (pre-created by fn_ensure_all_blocks)
+  const { data: targetBlock, error: blockErr } = await supabase
+    .from("work_blocks")
+    .select("id_block")
+    .eq("id_department", params.targetDeptId)
+    .eq("date", params.targetDate)
+    .eq("period", params.period)
+    .single();
+
+  if (blockErr || !targetBlock) {
+    throw new Error(`Target block not found for dept=${params.targetDeptId} date=${params.targetDate} period=${params.period}`);
+  }
+
+  // 3. Upsert new MANUAL assignment (handles case where a CANCELLED row already exists for this block+staff)
+  return throwIfError(
+    await supabase
+      .from("assignments")
+      .upsert(
+        {
+          id_block: targetBlock.id_block,
+          id_staff: params.staffId,
+          assignment_type: "DOCTOR",
+          id_activity: params.activityId ?? null,
+          source: "MANUAL",
+          id_schedule: null,
+          status: "PUBLISHED",
+        },
+        { onConflict: "id_block,id_staff" }
+      )
+      .select()
+      .single()
+  );
+}
+
 // ============================================================
 // PLANNING — Monthly
 // ============================================================
+
+interface LeaveRecord {
+  id_staff: number;
+  start_date: string;
+  end_date: string;
+  period: string | null;
+}
+
+function buildAbsentKeys(leaves: LeaveRecord[], startStr: string, endStr: string): Set<string> {
+  const keys = new Set<string>();
+  for (const leave of leaves) {
+    const from = leave.start_date < startStr ? startStr : leave.start_date;
+    const to = leave.end_date > endStr ? endStr : leave.end_date;
+    let cursor = new Date(from);
+    const end = new Date(to);
+    while (cursor <= end) {
+      const dateStr = format(cursor, "yyyy-MM-dd");
+      if (leave.period === "AM" || leave.period === null) {
+        keys.add(`${leave.id_staff}:${dateStr}:AM`);
+      }
+      if (leave.period === "PM" || leave.period === null) {
+        keys.add(`${leave.id_staff}:${dateStr}:PM`);
+      }
+      cursor = addDays(cursor, 1);
+    }
+  }
+  return keys;
+}
 
 interface RawBlock {
   id_block: number;
@@ -540,8 +628,6 @@ interface RawBlock {
   period: string;
   block_type: string;
   id_department: number;
-  id_activity: number | null;
-  activity_templates: { name: string } | null;
   departments: {
     name: string;
     id_site: number;
@@ -553,11 +639,15 @@ interface RawBlock {
     assignment_type: string;
     id_role: number | null;
     id_skill: number | null;
+    id_activity: number | null;
+    id_linked_doctor: number | null;
     source: string;
     status: string;
+    id_schedule: number | null;
     staff: { firstname: string; lastname: string; id_primary_position: number };
     secretary_roles: { name: string } | null;
     skills: { name: string } | null;
+    activity_templates: { name: string } | null;
   }>;
 }
 
@@ -581,25 +671,41 @@ export async function fetchMonthPlanning(
   const monthDate = new Date(`${month}-01`);
   const monthStart = startOfMonth(monthDate);
   const monthEnd = endOfMonth(monthDate);
-  const startStr = format(monthStart, "yyyy-MM-dd");
-  const endStr = format(monthEnd, "yyyy-MM-dd");
 
-  const [blocksRes, needsRes] = await Promise.all([
+  // Extend range to complete work-weeks (Mon–Fri).
+  // Only extend if the month starts/ends mid-week on a weekday (Tue–Fri / Mon–Thu).
+  // If the month starts on Sat/Sun, first displayed day is Monday (no extension).
+  // If the month ends on Sat/Sun, last displayed day is Friday (no extension).
+  const startDay = getDay(monthStart); // 0=Sun .. 6=Sat
+  const rangeStart = (startDay >= 2 && startDay <= 5)
+    ? startOfWeek(monthStart, { weekStartsOn: 1 }) // extend back to Monday
+    : monthStart;
+
+  const endDay = getDay(monthEnd);
+  const rangeEnd = (endDay >= 1 && endDay <= 4)
+    ? addDays(endOfWeek(monthEnd, { weekStartsOn: 1 }), -1) // extend forward to Saturday
+    : monthEnd;
+
+  const startStr = format(rangeStart, "yyyy-MM-dd");
+  const endStr = format(rangeEnd, "yyyy-MM-dd");
+
+  const [blocksRes, needsRes, leavesRes] = await Promise.all([
     supabase
       .from("work_blocks")
       .select(
-        `id_block, date, period, block_type, id_department, id_activity,
-         activity_templates ( name ),
+        `id_block, date, period, block_type, id_department,
          departments!inner (
            name, id_site,
            sites!inner ( name )
          ),
          assignments (
            id_assignment, id_staff, assignment_type, id_role, id_skill,
-           source, status,
+           id_activity, id_linked_doctor,
+           source, status, id_schedule,
            staff!inner ( firstname, lastname, id_primary_position ),
            secretary_roles ( name ),
-           skills ( name )
+           skills ( name ),
+           activity_templates ( name )
          )`
       )
       .gte("date", startStr)
@@ -611,19 +717,29 @@ export async function fetchMonthPlanning(
       .select("*")
       .gte("date", startStr)
       .lte("date", endStr),
+    supabase
+      .from("staff_leaves")
+      .select("id_staff, start_date, end_date, period")
+      .lte("start_date", endStr)
+      .gte("end_date", startStr),
   ]);
 
   if (blocksRes.error) throw new Error(`Blocks query error: ${blocksRes.error.message}`);
   if (needsRes.error) throw new Error(`Needs query error: ${needsRes.error.message}`);
+  if (leavesRes.error) throw new Error(`Leaves query error: ${leavesRes.error.message}`);
 
   const rawBlocks = (blocksRes.data ?? []) as unknown as RawBlock[];
   const needs = (needsRes.data ?? []) as StaffingNeed[];
+  const leaves = (leavesRes.data ?? []) as LeaveRecord[];
+  const absentKeys = buildAbsentKeys(leaves, startStr, endStr);
 
-  const allDays = eachDayOfInterval({ start: monthStart, end: monthEnd })
+  const daysWithBlocks = new Set(rawBlocks.map((b) => b.date.slice(0, 10)));
+  const allDays = eachDayOfInterval({ start: rangeStart, end: rangeEnd })
     .filter((d) => getDay(d) !== 0)
-    .map((d) => format(d, "yyyy-MM-dd"));
+    .map((d) => format(d, "yyyy-MM-dd"))
+    .filter((d) => getDay(new Date(d)) !== 6 || daysWithBlocks.has(d));
 
-  return transformMonthData(rawBlocks, needs, allDays);
+  return transformMonthData(rawBlocks, needs, allDays, absentKeys);
 }
 
 // ============================================================
@@ -634,22 +750,23 @@ export async function fetchWeekPlanning(supabase: SupabaseClient, weekStart: str
   const wsDate = new Date(weekStart);
   const weekEnd = format(addDays(wsDate, 5), "yyyy-MM-dd");
 
-  const [blocksRes, needsRes] = await Promise.all([
+  const [blocksRes, needsRes, leavesRes] = await Promise.all([
     supabase
       .from("work_blocks")
       .select(
-        `id_block, date, period, block_type, id_department, id_activity,
-         activity_templates ( name ),
+        `id_block, date, period, block_type, id_department,
          departments!inner (
            name, id_site,
            sites!inner ( name )
          ),
          assignments (
            id_assignment, id_staff, assignment_type, id_role, id_skill,
-           source, status,
+           id_activity, id_linked_doctor,
+           source, status, id_schedule,
            staff!inner ( firstname, lastname, id_primary_position ),
            secretary_roles ( name ),
-           skills ( name )
+           skills ( name ),
+           activity_templates ( name )
          )`
       )
       .gte("date", weekStart)
@@ -661,31 +778,37 @@ export async function fetchWeekPlanning(supabase: SupabaseClient, weekStart: str
       .select("*")
       .gte("date", weekStart)
       .lte("date", weekEnd),
+    supabase
+      .from("staff_leaves")
+      .select("id_staff, start_date, end_date, period")
+      .lte("start_date", weekEnd)
+      .gte("end_date", weekStart),
   ]);
 
   if (blocksRes.error) throw new Error(`Blocks query error: ${blocksRes.error.message}`);
   if (needsRes.error) throw new Error(`Needs query error: ${needsRes.error.message}`);
+  if (leavesRes.error) throw new Error(`Leaves query error: ${leavesRes.error.message}`);
 
   const rawBlocks = (blocksRes.data ?? []) as unknown as RawBlock[];
   const needs = (needsRes.data ?? []) as StaffingNeed[];
+  const leaves = (leavesRes.data ?? []) as LeaveRecord[];
+  const absentKeys = buildAbsentKeys(leaves, weekStart, weekEnd);
 
-  return transformWeekData(rawBlocks, needs, weekStart);
+  return transformWeekData(rawBlocks, needs, weekStart, absentKeys);
 }
 
 // ============================================================
 // PLANNING — Transform helpers (shared)
 // ============================================================
 
-function transformBlock(raw: RawBlock): PlanningBlock {
-  const activeAssignments = (raw.assignments ?? []).filter(
-    (a) => a.status !== "CANCELLED" && a.status !== "INVALIDATED"
-  );
+function transformBlock(raw: RawBlock, absentKeys: Set<string>): PlanningBlock {
+  const activeAssignments = (raw.assignments ?? [])
+    .filter((a) => a.status !== "CANCELLED" && a.status !== "INVALIDATED")
+    .filter((a) => !absentKeys.has(`${a.id_staff}:${raw.date}:${raw.period}`));
 
   return {
     id_block: raw.id_block,
     block_type: raw.block_type as PlanningBlock["block_type"],
-    id_activity: raw.id_activity ?? null,
-    activity_name: raw.activity_templates?.name ?? null,
     assignments: activeAssignments.map((a) => ({
       id_assignment: a.id_assignment,
       id_staff: a.id_staff,
@@ -696,9 +819,13 @@ function transformBlock(raw: RawBlock): PlanningBlock {
       role_name: a.secretary_roles?.name ?? null,
       id_skill: a.id_skill,
       skill_name: a.skills?.name ?? null,
+      id_activity: a.id_activity ?? null,
+      activity_name: a.activity_templates?.name ?? null,
+      id_linked_doctor: a.id_linked_doctor ?? null,
       source: a.source as PlanningAssignment["source"],
       status: a.status as PlanningAssignment["status"],
       id_primary_position: a.staff.id_primary_position as PlanningAssignment["id_primary_position"],
+      id_schedule: a.id_schedule ?? null,
     })),
   };
 }
@@ -770,7 +897,8 @@ function computeStats(rawBlocks: RawBlock[], needs: StaffingNeed[]) {
 function extractVirtualSites(
   siteMap: ReturnType<typeof buildSiteMap>,
   needsByBlock: Map<number, StaffingNeed[]>,
-  days: string[]
+  days: string[],
+  absentKeys: Set<string>
 ) {
   const buildDays = (blocks: RawBlock[]): PlanningDay[] =>
     days.map((dateStr) => {
@@ -780,13 +908,13 @@ function extractVirtualSites(
       return {
         date: dateStr,
         am: {
-          blocks: amBlocks.map(transformBlock),
+          blocks: amBlocks.map((b) => transformBlock(b, absentKeys)),
           needs: amBlocks.flatMap((b) =>
             (needsByBlock.get(b.id_block) ?? []).filter((n) => n.gap > 0)
           ),
         },
         pm: {
-          blocks: pmBlocks.map(transformBlock),
+          blocks: pmBlocks.map((b) => transformBlock(b, absentKeys)),
           needs: pmBlocks.flatMap((b) =>
             (needsByBlock.get(b.id_block) ?? []).filter((n) => n.gap > 0)
           ),
@@ -858,13 +986,35 @@ function extractVirtualSites(
     sites.push({ id_site: siteId, name: siteData.name, departments });
   }
 
-  // Bloc Opératoire last
+  // Bloc Opératoire last — group by doctor assignment activity
   if (surgeryBlocks.length > 0) {
     const byActivity = new Map<string, RawBlock[]>();
     for (const block of surgeryBlocks) {
-      const actName = block.activity_templates?.name ?? "Autres interventions";
-      if (!byActivity.has(actName)) byActivity.set(actName, []);
-      byActivity.get(actName)!.push(block);
+      // Find activities from doctor assignments in this block
+      const doctorActivities = new Set<string>();
+      for (const a of block.assignments ?? []) {
+        if (
+          a.assignment_type === "DOCTOR" &&
+          a.status !== "CANCELLED" &&
+          a.status !== "INVALIDATED" &&
+          a.activity_templates?.name
+        ) {
+          doctorActivities.add(a.activity_templates.name);
+        }
+      }
+
+      if (doctorActivities.size === 0) {
+        // Block with no active doctor activities — show under generic name
+        const key = "Bloc opératoire";
+        if (!byActivity.has(key)) byActivity.set(key, []);
+        byActivity.get(key)!.push(block);
+      } else {
+        // Show under each activity that has a doctor
+        for (const actName of doctorActivities) {
+          if (!byActivity.has(actName)) byActivity.set(actName, []);
+          byActivity.get(actName)!.push(block);
+        }
+      }
     }
 
     const blocDepts: PlanningDepartment[] = [];
@@ -892,12 +1042,13 @@ function extractVirtualSites(
 function transformMonthData(
   rawBlocks: RawBlock[],
   needs: StaffingNeed[],
-  days: string[]
+  days: string[],
+  absentKeys: Set<string>
 ): MonthPlanningData {
   const siteMap = buildSiteMap(rawBlocks);
   const needsByBlock = buildNeedsIndex(needs);
   const stats = computeStats(rawBlocks, needs);
-  const sites = extractVirtualSites(siteMap, needsByBlock, days);
+  const sites = extractVirtualSites(siteMap, needsByBlock, days, absentKeys);
 
   return { days, sites, stats };
 }
@@ -905,18 +1056,24 @@ function transformMonthData(
 function transformWeekData(
   rawBlocks: RawBlock[],
   needs: StaffingNeed[],
-  weekStart: string
+  weekStart: string,
+  absentKeys: Set<string>
 ) {
   const wsDate = new Date(weekStart);
+  const daysWithBlocks = new Set(rawBlocks.map((b) => b.date.slice(0, 10)));
   const days: string[] = [];
   for (let i = 0; i < 6; i++) {
-    days.push(format(addDays(wsDate, i), "yyyy-MM-dd"));
+    const d = format(addDays(wsDate, i), "yyyy-MM-dd");
+    // Saturday (i=5) only if there are blocks scheduled
+    if (i < 5 || daysWithBlocks.has(d)) {
+      days.push(d);
+    }
   }
 
   const siteMap = buildSiteMap(rawBlocks);
   const needsByBlock = buildNeedsIndex(needs);
   const stats = computeStats(rawBlocks, needs);
-  const sites = extractVirtualSites(siteMap, needsByBlock, days);
+  const sites = extractVirtualSites(siteMap, needsByBlock, days, absentKeys);
 
   return { sites, stats };
 }

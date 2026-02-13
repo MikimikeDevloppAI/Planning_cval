@@ -152,6 +152,8 @@ export function useAddLeave() {
     },
     onSuccess: (_, vars) => {
       queryClient.invalidateQueries({ queryKey: ["staff", vars.staffId] });
+      queryClient.invalidateQueries({ queryKey: ["planning"] });
+      queryClient.invalidateQueries({ queryKey: ["leaves"] });
     },
   });
 }
@@ -165,6 +167,8 @@ export function useDeleteLeave() {
     },
     onSuccess: (_, vars) => {
       queryClient.invalidateQueries({ queryKey: ["staff", vars.staffId] });
+      queryClient.invalidateQueries({ queryKey: ["planning"] });
+      queryClient.invalidateQueries({ queryKey: ["leaves"] });
     },
   });
 }

@@ -4,7 +4,6 @@ Secretary Assignment Algorithm using Google OR-Tools CP-SAT.
 Usage:
     python scripts/assign_secretaries.py --week 2026-01-06
     python scripts/assign_secretaries.py --week 2026-01-06 --dry-run
-    python scripts/assign_secretaries.py --week 2026-01-06 --clear-proposed
     python scripts/assign_secretaries.py --week 2026-01-06 --verbose
 """
 
@@ -27,7 +26,7 @@ from lib.db import (
     load_week_data,
     create_admin_blocks,
     load_admin_blocks,
-    clear_proposed,
+    clear_secretary_assignments,
     write_assignments,
 )
 from lib.model import build_model, solve_model
@@ -62,11 +61,6 @@ def parse_args():
         help="Compute and report without inserting into database",
     )
     parser.add_argument(
-        "--clear-proposed",
-        action="store_true",
-        help="Delete existing PROPOSED ALGORITHM assignments before running",
-    )
-    parser.add_argument(
         "--verbose",
         action="store_true",
         help="Print detailed model and solver info",
@@ -96,10 +90,12 @@ def main():
     # Connect
     conn = get_connection()
     try:
-        # Optional: clear existing proposed assignments
-        if args.clear_proposed:
-            deleted = clear_proposed(conn, week_start)
-            print(f"Nettoyage: {deleted} assignations PROPOSED supprimées")
+        # Clear SCHEDULE+ALGORITHM secretary assignments before solving
+        if not args.dry_run:
+            deleted = clear_secretary_assignments(conn, week_start)
+            print(f"Nettoyage: {deleted} assignations SCHEDULE/ALGORITHM supprimées")
+        else:
+            print("[DRY RUN] Nettoyage ignoré (pas de suppression)")
 
         # Load all data
         print("Chargement des données...")

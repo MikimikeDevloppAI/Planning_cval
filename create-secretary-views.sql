@@ -8,7 +8,7 @@ DROP VIEW IF EXISTS v_secretary_availability;
 -- ============================================================
 -- 1. v_secretary_availability
 -- Disponibilités résolues : 1 ligne par secrétaire × date × period
--- Logique : RECURRING - OVERRIDE + ADDED - leaves
+-- Logique : RECURRING schedules - leaves
 -- ============================================================
 
 CREATE OR REPLACE VIEW v_secretary_availability AS
@@ -25,8 +25,6 @@ WITH dow_map(dow_int, dow_enum) AS (
 ),
 
 -- Expand RECURRING schedules (AVAILABLE) across the calendar
--- Secrétaires : schedule_type = 'AVAILABLE', pas de filtre id_department
--- Exclure weekends et jours fériés pour RECURRING
 recurring_expanded AS (
   SELECT
     ss.id_schedule,
@@ -40,8 +38,7 @@ recurring_expanded AS (
   JOIN calendar c ON c.day_of_week = dm.dow_enum
                  AND c.is_weekend = false
                  AND c.is_holiday = false
-  WHERE ss.entry_type = 'RECURRING'
-    AND ss.is_active = true
+  WHERE ss.is_active = true
     AND ss.schedule_type = 'AVAILABLE'
     AND s.id_primary_position = 2  -- Secrétaires
     AND s.is_active = true
@@ -67,8 +64,7 @@ recurring_expanded AS (
   JOIN calendar c ON c.day_of_week = dm.dow_enum
                  AND c.is_weekend = false
                  AND c.is_holiday = false
-  WHERE ss.entry_type = 'RECURRING'
-    AND ss.is_active = true
+  WHERE ss.is_active = true
     AND ss.schedule_type = 'AVAILABLE'
     AND ss.period = 'FULL_DAY'
     AND s.id_primary_position = 2
@@ -81,99 +77,10 @@ recurring_expanded AS (
     AND (ss.end_date IS NULL OR c.date <= ss.end_date)
 ),
 
--- Overridden parents
-overridden_parents AS (
-  SELECT DISTINCT
-    ov.id_parent_schedule,
-    ov.specific_date
-  FROM staff_schedules ov
-  WHERE ov.entry_type = 'OVERRIDE'
-    AND ov.is_active = true
-    AND ov.schedule_type = 'AVAILABLE'
-),
-
--- Remove overridden recurring entries
-recurring_clean AS (
-  SELECT re.*
-  FROM recurring_expanded re
-  WHERE NOT EXISTS (
-    SELECT 1 FROM overridden_parents op
-    WHERE op.id_parent_schedule = re.id_schedule
-      AND op.specific_date = re.date
-  )
-),
-
--- OVERRIDE entries (replacements)
-override_entries AS (
-  SELECT
-    ss.id_schedule,
-    ss.id_staff,
-    ss.specific_date AS date,
-    CASE WHEN ss.period = 'FULL_DAY' THEN 'AM' ELSE ss.period END AS period
-  FROM staff_schedules ss
-  JOIN staff s ON ss.id_staff = s.id_staff
-  WHERE ss.entry_type = 'OVERRIDE'
-    AND ss.is_active = true
-    AND ss.schedule_type = 'AVAILABLE'
-    AND s.id_primary_position = 2
-    AND s.is_active = true
-
-  UNION ALL
-
-  SELECT
-    ss.id_schedule, ss.id_staff, ss.specific_date, 'PM'
-  FROM staff_schedules ss
-  JOIN staff s ON ss.id_staff = s.id_staff
-  WHERE ss.entry_type = 'OVERRIDE'
-    AND ss.is_active = true
-    AND ss.schedule_type = 'AVAILABLE'
-    AND ss.period = 'FULL_DAY'
-    AND s.id_primary_position = 2
-    AND s.is_active = true
-),
-
--- ADDED entries (extra one-off, can include Saturdays)
-added_entries AS (
-  SELECT
-    ss.id_schedule,
-    ss.id_staff,
-    ss.specific_date AS date,
-    CASE WHEN ss.period = 'FULL_DAY' THEN 'AM' ELSE ss.period END AS period
-  FROM staff_schedules ss
-  JOIN staff s ON ss.id_staff = s.id_staff
-  WHERE ss.entry_type = 'ADDED'
-    AND ss.is_active = true
-    AND ss.schedule_type = 'AVAILABLE'
-    AND s.id_primary_position = 2
-    AND s.is_active = true
-
-  UNION ALL
-
-  SELECT
-    ss.id_schedule, ss.id_staff, ss.specific_date, 'PM'
-  FROM staff_schedules ss
-  JOIN staff s ON ss.id_staff = s.id_staff
-  WHERE ss.entry_type = 'ADDED'
-    AND ss.is_active = true
-    AND ss.schedule_type = 'AVAILABLE'
-    AND ss.period = 'FULL_DAY'
-    AND s.id_primary_position = 2
-    AND s.is_active = true
-),
-
--- Combine all
-all_entries AS (
-  SELECT id_staff, date, period FROM recurring_clean
-  UNION ALL
-  SELECT id_staff, date, period FROM override_entries
-  UNION ALL
-  SELECT id_staff, date, period FROM added_entries
-),
-
--- Deduplicate (a secretary is available once per date+period)
+-- Deduplicate
 deduped AS (
   SELECT DISTINCT id_staff, date, period
-  FROM all_entries
+  FROM recurring_expanded
 ),
 
 -- Remove leaves

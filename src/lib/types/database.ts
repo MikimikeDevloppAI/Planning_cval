@@ -4,7 +4,6 @@
 
 // Enums
 export type DayOfWeek = "MON" | "TUE" | "WED" | "THU" | "FRI" | "SAT" | "SUN";
-export type EntryType = "RECURRING" | "OVERRIDE" | "ADDED";
 export type ScheduleType = "FIXED" | "AVAILABLE";
 export type Period = "AM" | "PM";
 export type PeriodFull = "AM" | "PM" | "FULL_DAY";
@@ -72,18 +71,15 @@ export interface CalendarDay {
 export interface StaffSchedule {
   id_schedule: number;
   id_staff: number;
-  entry_type: EntryType;
   schedule_type: ScheduleType;
   day_of_week: number | null;
   period: PeriodFull;
   id_department: number | null;
   id_recurrence: number | null;
   id_activity: number | null;
-  specific_date: string | null;
   week_offset: number | null;
   start_date: string | null;
   end_date: string | null;
-  id_parent_schedule: number | null;
   is_active: boolean;
 }
 
@@ -131,7 +127,6 @@ export interface WorkBlock {
   date: string;
   period: Period;
   block_type: BlockType;
-  id_activity: number | null;
 }
 
 export interface Assignment {
@@ -141,6 +136,8 @@ export interface Assignment {
   assignment_type: AssignmentType;
   id_role: number | null;
   id_skill: number | null;
+  id_activity: number | null;
+  id_linked_doctor: number | null;
   source: AssignmentSource;
   status: AssignmentStatus;
   changed_by: string | null;
@@ -205,16 +202,18 @@ export interface PlanningAssignment {
   role_name: string | null;
   id_skill: number | null;
   skill_name: string | null;
+  id_activity: number | null;
+  activity_name: string | null;
+  id_linked_doctor: number | null;
   source: AssignmentSource;
   status: AssignmentStatus;
   id_primary_position: PrimaryPosition;
+  id_schedule: number | null;
 }
 
 export interface PlanningBlock {
   id_block: number;
   block_type: BlockType;
-  id_activity: number | null;
-  activity_name: string | null;
   assignments: PlanningAssignment[];
 }
 

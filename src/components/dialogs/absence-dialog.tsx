@@ -49,19 +49,16 @@ export function AbsenceDialog() {
     setResult(null);
 
     try {
-      const data = await addStaffLeave(supabase, selectedStaffId as number, {
+      await addStaffLeave(supabase, selectedStaffId as number, {
         start_date: startDate,
         end_date: endDate,
         period: period || null,
       });
 
-      setResult(
-        `Absence enregistrée. ${data.invalidated} assignation(s) invalidée(s), ${data.issues} alerte(s) créée(s).`
-      );
+      setResult("Absence enregistrée. Le planning a été mis à jour automatiquement.");
 
-      queryClient.invalidateQueries({
-        queryKey: ["planning", toISODate(weekStart)],
-      });
+      queryClient.invalidateQueries({ queryKey: ["planning"] });
+      queryClient.invalidateQueries({ queryKey: ["leaves"] });
     } catch (err) {
       setResult(`Erreur: ${err instanceof Error ? err.message : "Inconnue"}`);
     } finally {

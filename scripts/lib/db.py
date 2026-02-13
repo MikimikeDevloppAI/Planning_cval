@@ -79,12 +79,13 @@ def load_week_data(conn, week_start: date):
     )
     data["needs"] = cur.fetchall()
 
-    # 5. Existing SECRETARY assignments (for idempotency)
+    # 5. Existing MANUAL secretary assignments (preserved by solver)
     cur.execute(
         """SELECT a.id_block, a.id_staff, a.id_role, wb.date, wb.period
            FROM assignments a
            JOIN work_blocks wb ON a.id_block = wb.id_block
            WHERE a.assignment_type = 'SECRETARY'
+             AND a.source = 'MANUAL'
              AND a.status NOT IN ('CANCELLED', 'INVALIDATED')
              AND wb.date BETWEEN %s AND %s""",
         (week_start, week_end),
@@ -114,14 +115,29 @@ def load_week_data(conn, week_start: date):
     )
     data["preferences"] = cur.fetchall()
 
-    # 8. Admin department ID
+    # 8. Doctor-activity mapping per block (for surgery id_linked_doctor)
+    cur.execute(
+        """SELECT a.id_assignment, a.id_block, a.id_staff, a.id_activity,
+                  ar.id_skill
+           FROM assignments a
+           JOIN activity_requirements ar ON ar.id_activity = a.id_activity
+           JOIN work_blocks wb ON a.id_block = wb.id_block
+           WHERE a.assignment_type = 'DOCTOR'
+             AND a.status NOT IN ('CANCELLED', 'INVALIDATED')
+             AND a.id_activity IS NOT NULL
+             AND wb.date BETWEEN %s AND %s""",
+        (week_start, week_end),
+    )
+    data["doctor_activities"] = cur.fetchall()
+
+    # 9. Admin department ID
     cur.execute(
         "SELECT id_department FROM departments WHERE name = 'Administration' LIMIT 1"
     )
     row = cur.fetchone()
     data["admin_dept_id"] = row["id_department"] if row else None
 
-    # 9. All active secretaries (including those without availability this week)
+    # 10. All active secretaries (including those without availability this week)
     cur.execute(
         """SELECT s.id_staff, s.lastname, s.firstname
            FROM staff s
@@ -130,7 +146,7 @@ def load_week_data(conn, week_start: date):
     )
     data["all_secretaries"] = cur.fetchall()
 
-    # 10. Staff skills (for report - who has no skills)
+    # 11. Staff skills (for report - who has no skills)
     cur.execute(
         """SELECT ss.id_staff, ss.id_skill
            FROM staff_skills ss
@@ -183,23 +199,26 @@ def load_admin_blocks(conn, week_start: date):
     return cur.fetchall()
 
 
-def clear_proposed(conn, week_start: date):
-    """Invalidate existing PROPOSED ALGORITHM secretary assignments for the week."""
+def clear_secretary_assignments(conn, week_start: date):
+    """Delete all non-MANUAL secretary assignments for the week.
+
+    Removes SCHEDULE (pre-materialized ADMIN) and ALGORITHM (previous solver)
+    so the solver can recreate everything from scratch. MANUAL are preserved.
+    """
     week_end = week_start + timedelta(days=6)
     cur = conn.cursor()
     cur.execute(
-        """UPDATE assignments SET status = 'INVALIDATED'
+        """DELETE FROM assignments
            WHERE assignment_type = 'SECRETARY'
-             AND source = 'ALGORITHM'
-             AND status = 'PROPOSED'
+             AND source IN ('SCHEDULE', 'ALGORITHM')
              AND id_block IN (
                SELECT id_block FROM work_blocks WHERE date BETWEEN %s AND %s
              )""",
         (week_start, week_end),
     )
-    cleared = cur.rowcount
+    deleted = cur.rowcount
     conn.commit()
-    return cleared
+    return deleted
 
 
 def write_assignments(conn, assignments):
@@ -211,16 +230,17 @@ def write_assignments(conn, assignments):
     values = []
     params = []
     for i, a in enumerate(assignments):
-        values.append("(%s, %s, 'SECRETARY', %s, %s, 'ALGORITHM', 'PROPOSED')")
+        values.append("(%s, %s, 'SECRETARY', %s, %s, %s, 'ALGORITHM', 'PROPOSED')")
         # chk_secretary requires id_role NOT NULL for SECRETARY type; default to 1 (Standard)
         role_id = a["id_role"] if a["id_role"] is not None else 1
-        params.extend([a["id_block"], a["id_staff"], role_id, a.get("id_skill")])
+        params.extend([a["id_block"], a["id_staff"], role_id, a.get("id_skill"), a.get("id_linked_doctor")])
 
     sql = (
-        "INSERT INTO assignments (id_block, id_staff, assignment_type, id_role, id_skill, source, status) "
+        "INSERT INTO assignments (id_block, id_staff, assignment_type, id_role, id_skill, id_linked_doctor, source, status) "
         "VALUES " + ", ".join(values) + " "
         "ON CONFLICT (id_block, id_staff) DO UPDATE SET "
         "id_role = EXCLUDED.id_role, id_skill = EXCLUDED.id_skill, "
+        "id_linked_doctor = EXCLUDED.id_linked_doctor, "
         "source = EXCLUDED.source, status = EXCLUDED.status"
     )
     cur.execute(sql, params)

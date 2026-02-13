@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
 import { fetchMonthPlanning, fetchMonthLeaves } from "@/lib/supabase/queries";
 import { useAppStore } from "@/store/use-app-store";
-import { format, startOfMonth, endOfMonth } from "date-fns";
+import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, addDays } from "date-fns";
 import { fr } from "date-fns/locale";
 import {
   ChevronLeft,
@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TabButton } from "@/components/ui/primary-button";
+import { CustomSelect } from "@/components/ui/custom-select";
 import { DepartmentsTableView } from "@/components/planning/departments-table-view";
 import { CollaborateursTableView } from "@/components/planning/collaborateurs-table-view";
 import type { PlanningSite } from "@/lib/types/database";
@@ -62,12 +63,23 @@ export default function PlanningPage() {
     queryFn: () => fetchMonthPlanning(supabase, monthStr) as Promise<MonthPlanningData>,
   });
 
-  const monthStart = format(currentMonth, "yyyy-MM-dd");
-  const monthEnd = format(endOfMonth(currentMonth), "yyyy-MM-dd");
+  // Extend range to complete work-weeks matching fetchMonthPlanning
+  const ms = startOfMonth(currentMonth);
+  const me = endOfMonth(currentMonth);
+  const msDay = ms.getDay(); // 0=Sun .. 6=Sat
+  const meDay = me.getDay();
+  const rangeStart = format(
+    (msDay >= 2 && msDay <= 5) ? startOfWeek(ms, { weekStartsOn: 1 }) : ms,
+    "yyyy-MM-dd"
+  );
+  const rangeEnd = format(
+    (meDay >= 1 && meDay <= 4) ? addDays(endOfWeek(me, { weekStartsOn: 1 }), -1) : me,
+    "yyyy-MM-dd"
+  );
 
   const { data: leaves } = useQuery({
     queryKey: ["leaves", "month", monthStr],
-    queryFn: () => fetchMonthLeaves(supabase, monthStart, monthEnd),
+    queryFn: () => fetchMonthLeaves(supabase, rangeStart, rangeEnd),
   });
 
   // Extract unique sites & departments for filter dropdowns
@@ -255,35 +267,23 @@ export default function PlanningPage() {
             <Filter className="w-4 h-4 text-muted-foreground shrink-0" />
 
             {/* Site filter */}
-            <select
-              value={selectedSiteId ?? ""}
-              onChange={(e) => {
-                setSelectedSiteId(e.target.value ? Number(e.target.value) : null);
+            <CustomSelect
+              options={siteOptions.map((s) => ({ value: String(s.id), label: s.name }))}
+              value={selectedSiteId !== null ? String(selectedSiteId) : ""}
+              onChange={(v) => {
+                setSelectedSiteId(v ? Number(v) : null);
                 setSelectedDeptName(null);
               }}
-              className="h-8 px-2.5 text-sm rounded-lg border border-border/50 bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-primary/30"
-            >
-              <option value="">Tous les sites</option>
-              {siteOptions.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
+              placeholder="Tous les sites"
+            />
 
             {/* Department filter */}
-            <select
+            <CustomSelect
+              options={deptOptions.map((d) => ({ value: d, label: d }))}
               value={selectedDeptName ?? ""}
-              onChange={(e) => setSelectedDeptName(e.target.value || null)}
-              className="h-8 px-2.5 text-sm rounded-lg border border-border/50 bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-primary/30"
-            >
-              <option value="">Tous les départements</option>
-              {deptOptions.map((d) => (
-                <option key={d} value={d}>
-                  {d}
-                </option>
-              ))}
-            </select>
+              onChange={(v) => setSelectedDeptName(v || null)}
+              placeholder="Tous les départements"
+            />
 
             {/* Person search */}
             <input

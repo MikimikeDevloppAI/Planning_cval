@@ -5,26 +5,19 @@ import { useRouter } from "next/navigation";
 import { useStaffList } from "@/hooks/use-staff";
 import { POSITION_LABELS } from "@/lib/constants";
 import { getInitials } from "@/lib/utils/initials";
+import { getPositionColors } from "@/lib/utils/position-colors";
+import { cn } from "@/lib/utils";
 import {
   Search,
-  Filter,
-  ChevronUp,
-  ChevronDown,
   Loader2,
   UserCircle2,
+  ChevronRight,
 } from "lucide-react";
-
-type SortKey = "lastname" | "position" | "is_active";
-type SortDir = "asc" | "desc";
 
 export function StaffTable() {
   const [search, setSearch] = useState("");
   const [posFilter, setPosFilter] = useState<number | "">("");
   const [activeFilter, setActiveFilter] = useState<string>("true");
-  const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({
-    key: "lastname",
-    dir: "asc",
-  });
 
   const { data: staffList, isLoading, error } = useStaffList({
     position: posFilter ? posFilter : undefined,
@@ -45,42 +38,29 @@ export function StaffTable() {
       );
     }
 
-    list.sort((a: Record<string, unknown>, b: Record<string, unknown>) => {
-      let cmp = 0;
-      if (sort.key === "lastname") {
-        cmp = (a.lastname as string).localeCompare(b.lastname as string);
-      } else if (sort.key === "position") {
-        cmp = (a.id_primary_position as number) - (b.id_primary_position as number);
-      } else if (sort.key === "is_active") {
-        cmp = (a.is_active === b.is_active) ? 0 : a.is_active ? -1 : 1;
-      }
-      return sort.dir === "asc" ? cmp : -cmp;
-    });
+    list.sort((a: Record<string, unknown>, b: Record<string, unknown>) =>
+      (a.lastname as string).localeCompare(b.lastname as string)
+    );
 
     return list;
-  }, [staffList, search, sort]);
+  }, [staffList, search]);
 
-  const toggleSort = (key: SortKey) => {
-    setSort((prev) =>
-      prev.key === key
-        ? { key, dir: prev.dir === "asc" ? "desc" : "asc" }
-        : { key, dir: "asc" }
-    );
-  };
-
-  const SortIcon = ({ col }: { col: SortKey }) => {
-    if (sort.key !== col) return <ChevronUp className="w-3 h-3 text-border" />;
-    return sort.dir === "asc" ? (
-      <ChevronUp className="w-3 h-3 text-primary" />
-    ) : (
-      <ChevronDown className="w-3 h-3 text-primary" />
-    );
-  };
+  // Group by position
+  const grouped = useMemo(() => {
+    const groups = new Map<number, typeof filtered>();
+    for (const s of filtered) {
+      const pos = s.id_primary_position as number;
+      if (!groups.has(pos)) groups.set(pos, []);
+      groups.get(pos)!.push(s);
+    }
+    return Array.from(groups.entries()).sort((a, b) => a[0] - b[0]);
+  }, [filtered]);
 
   return (
     <div>
       {/* Filters bar */}
-      <div className="flex flex-wrap items-center gap-3 mb-4">
+      <div className="flex flex-wrap items-center gap-4 mb-6">
+        {/* Search */}
         <div className="relative flex-1 min-w-[200px] max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <input
@@ -92,40 +72,66 @@ export function StaffTable() {
           />
         </div>
 
-        <div className="flex items-center gap-2">
-          <Filter className="w-4 h-4 text-muted-foreground" />
-          <select
-            value={posFilter}
-            onChange={(e) => setPosFilter(e.target.value ? parseInt(e.target.value) : "")}
-            className="text-sm rounded-xl border border-border/50 bg-card px-3 py-2 focus:ring-2 focus:ring-ring outline-none"
+        {/* Position pill tabs */}
+        <div className="flex items-center gap-1 bg-muted/50 rounded-xl p-1">
+          <button
+            onClick={() => setPosFilter("")}
+            className={cn(
+              "px-3 py-1.5 text-xs font-medium rounded-lg transition-all",
+              posFilter === ""
+                ? "bg-card text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            )}
           >
-            <option value="">Toutes positions</option>
-            {Object.entries(POSITION_LABELS).map(([id, label]) => (
-              <option key={id} value={id}>
-                {label}
-              </option>
-            ))}
-          </select>
-
-          <select
-            value={activeFilter}
-            onChange={(e) => setActiveFilter(e.target.value)}
-            className="text-sm rounded-xl border border-border/50 bg-card px-3 py-2 focus:ring-2 focus:ring-ring outline-none"
-          >
-            <option value="true">Actifs</option>
-            <option value="false">Inactifs</option>
-            <option value="all">Tous</option>
-          </select>
+            Tous
+          </button>
+          {([1, 2, 3] as const).map((id) => (
+            <button
+              key={id}
+              onClick={() => setPosFilter(posFilter === id ? "" : id)}
+              className={cn(
+                "px-3 py-1.5 text-xs font-medium rounded-lg transition-all",
+                posFilter === id
+                  ? "bg-card text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {POSITION_LABELS[id]}s
+            </button>
+          ))}
         </div>
 
-        <div className="text-sm text-muted-foreground">
+        {/* Active pill tabs */}
+        <div className="flex items-center gap-1 bg-muted/50 rounded-xl p-1">
+          {([
+            { value: "true", label: "Actifs" },
+            { value: "false", label: "Inactifs" },
+            { value: "all", label: "Tous" },
+          ] as const).map((opt) => (
+            <button
+              key={opt.value}
+              onClick={() => setActiveFilter(opt.value)}
+              className={cn(
+                "px-3 py-1.5 text-xs font-medium rounded-lg transition-all",
+                activeFilter === opt.value
+                  ? "bg-card text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Count */}
+        <span className="text-sm text-muted-foreground">
           {filtered.length} résultat{filtered.length !== 1 ? "s" : ""}
-        </div>
+        </span>
       </div>
 
       {/* Loading */}
       {isLoading && (
-        <div className="flex items-center justify-center py-16 text-muted-foreground">
+        <div className="flex items-center justify-center py-20 text-muted-foreground">
           <Loader2 className="w-6 h-6 animate-spin mr-2" />
           Chargement...
         </div>
@@ -138,140 +144,162 @@ export function StaffTable() {
         </div>
       )}
 
-      {/* Table */}
+      {/* Cards */}
       {!isLoading && !error && (
-        <div className="bg-card rounded-xl shadow-soft border border-border/50 overflow-hidden">
-          <table className="w-full">
-            <thead>
-              <tr className="bg-muted/50 border-b border-border/30">
-                <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider w-12" />
-                <th
-                  className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider cursor-pointer select-none"
-                  onClick={() => toggleSort("lastname")}
-                >
-                  <div className="flex items-center gap-1">
-                    Nom <SortIcon col="lastname" />
-                  </div>
-                </th>
-                <th
-                  className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider cursor-pointer select-none"
-                  onClick={() => toggleSort("position")}
-                >
-                  <div className="flex items-center gap-1">
-                    Position <SortIcon col="position" />
-                  </div>
-                </th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                  Paramètres
-                </th>
-                <th
-                  className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider cursor-pointer select-none"
-                  onClick={() => toggleSort("is_active")}
-                >
-                  <div className="flex items-center gap-1">
-                    Statut <SortIcon col="is_active" />
-                  </div>
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border/20">
-              {filtered.map((staff: Record<string, unknown>) => {
-                const positionName =
-                  (staff.positions as { name: string } | null)?.name ?? "—";
-                const settings = staff.staff_secretary_settings as {
-                  is_flexible?: boolean;
-                  full_day_only?: boolean;
-                  admin_target?: number;
-                } | null;
-
-                const posColor =
-                  staff.id_primary_position === 1
-                    ? "bg-[#e8f0fe] text-[#1a56db]"
-                    : staff.id_primary_position === 2
-                    ? "bg-[#e6f4ea] text-[#1e7e34]"
-                    : "bg-[#f3e8fd] text-[#6a1b9a]";
-
+        <>
+          {filtered.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
+              <div className="w-16 h-16 rounded-2xl bg-muted/50 flex items-center justify-center mb-4">
+                <UserCircle2 className="w-8 h-8" />
+              </div>
+              <p className="text-sm font-medium">Aucun résultat</p>
+              <p className="text-xs mt-1">Essayez de modifier vos filtres</p>
+            </div>
+          ) : (
+            <div className="space-y-8">
+              {grouped.map(([posId, members]) => {
+                const colors = getPositionColors(posId);
                 return (
-                  <tr
-                    key={staff.id_staff as number}
-                    className="hover:bg-muted/30 cursor-pointer transition-colors"
-                    onClick={() => router.push(`/staff/${staff.id_staff}`)}
-                  >
-                    <td className="px-4 py-3">
+                  <section key={posId}>
+                    {/* Section header */}
+                    <div className="flex items-center gap-3 mb-4">
                       <div
-                        className={`w-9 h-9 rounded-full ${posColor} flex items-center justify-center text-xs font-bold`}
-                      >
-                        {getInitials(
-                          staff.firstname as string,
-                          staff.lastname as string
+                        className={cn(
+                          "w-1 h-8 rounded-full bg-gradient-to-b",
+                          colors.gradient
                         )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="font-medium text-foreground text-sm">
-                        {staff.lastname as string} {staff.firstname as string}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          staff.id_primary_position === 1
-                            ? "bg-[#e8f0fe] text-[#1a56db]"
-                            : staff.id_primary_position === 2
-                            ? "bg-[#e6f4ea] text-[#1e7e34]"
-                            : "bg-[#f3e8fd] text-[#6a1b9a]"
-                        }`}
-                      >
-                        {positionName}
+                      />
+                      <h3 className="text-sm font-semibold text-foreground">
+                        {POSITION_LABELS[posId]}s
+                      </h3>
+                      <span className="text-xs text-muted-foreground bg-muted rounded-full px-2 py-0.5">
+                        {members.length}
                       </span>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-muted-foreground">
-                      {(staff.id_primary_position as number) === 2 && settings ? (
-                        <div className="flex items-center gap-2 text-xs">
-                          {settings.is_flexible && (
-                            <span className="px-1.5 py-0.5 rounded bg-warning/10 text-warning">
-                              Flexible
-                            </span>
-                          )}
-                          {settings.full_day_only && (
-                            <span className="px-1.5 py-0.5 rounded bg-primary/10 text-primary">
-                              JC uniquement
-                            </span>
-                          )}
-                          {(settings.admin_target ?? 0) > 0 && (
-                            <span className="px-1.5 py-0.5 rounded bg-[#f3e8fd] text-[#6a1b9a]">
-                              Admin: {settings.admin_target}
-                            </span>
-                          )}
-                        </div>
-                      ) : (
-                        <span className="text-border">—</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      {staff.is_active ? (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-success/10 text-success">
-                          Actif
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-muted text-muted-foreground">
-                          Inactif
-                        </span>
-                      )}
-                    </td>
-                  </tr>
+                    </div>
+
+                    {/* Card grid */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                      {members.map((staff) => (
+                        <StaffListCard
+                          key={staff.id_staff as number}
+                          staff={staff}
+                          onClick={() =>
+                            router.push(`/staff/${staff.id_staff}`)
+                          }
+                        />
+                      ))}
+                    </div>
+                  </section>
                 );
               })}
-              {filtered.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="px-4 py-12 text-center text-muted-foreground">
-                    <UserCircle2 className="w-8 h-8 mx-auto mb-2" />
-                    Aucun résultat
-                  </td>
-                </tr>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+// ─── Staff list card ─────────────────────────────────────
+
+function StaffListCard({
+  staff,
+  onClick,
+}: {
+  staff: Record<string, unknown>;
+  onClick: () => void;
+}) {
+  const posId = staff.id_primary_position as number;
+  const colors = getPositionColors(posId);
+  const positionName =
+    (staff.positions as { name: string } | null)?.name ?? "—";
+  const settings = staff.staff_secretary_settings as {
+    is_flexible?: boolean;
+    full_day_only?: boolean;
+    admin_target?: number;
+  } | null;
+  const initials = getInitials(
+    staff.firstname as string,
+    staff.lastname as string
+  );
+  const isActive = staff.is_active as boolean;
+
+  return (
+    <div
+      onClick={onClick}
+      className={cn(
+        "group relative bg-card rounded-xl border border-border/50 p-5",
+        "shadow-[0_1px_3px_rgba(0,0,0,0.04)]",
+        "hover:shadow-[0_8px_25px_rgba(0,0,0,0.08)]",
+        "cursor-pointer transition-all duration-300 ease-out",
+        "hover:-translate-y-1 hover:border-border"
+      )}
+    >
+      {/* Top accent line — appears on hover */}
+      <div
+        className={cn(
+          "absolute top-0 left-4 right-4 h-0.5 rounded-b-full bg-gradient-to-r opacity-0 group-hover:opacity-100 transition-opacity duration-300",
+          colors.gradient
+        )}
+      />
+
+      {/* Avatar + Name */}
+      <div className="flex items-start gap-3.5">
+        <div
+          className={cn(
+            "w-12 h-12 rounded-full flex items-center justify-center text-sm font-bold shrink-0",
+            "transition-shadow duration-300",
+            colors.avatar
+          )}
+        >
+          {initials}
+        </div>
+
+        <div className="flex-1 min-w-0">
+          <h4 className="text-sm font-semibold text-foreground truncate">
+            {staff.lastname as string} {staff.firstname as string}
+          </h4>
+
+          <div className="flex items-center gap-2 mt-1.5">
+            <span
+              className={cn(
+                "inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold",
+                colors.badge
               )}
-            </tbody>
-          </table>
+            >
+              {positionName}
+            </span>
+
+            {!isActive && (
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-muted text-muted-foreground">
+                Inactif
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Hover chevron */}
+        <ChevronRight className="w-4 h-4 text-border group-hover:text-muted-foreground transition-colors shrink-0 mt-1" />
+      </div>
+
+      {/* Secretary settings badges */}
+      {posId === 2 && settings && (
+        <div className="flex flex-wrap items-center gap-1.5 mt-3 pt-3 border-t border-border/30">
+          {settings.is_flexible && (
+            <span className="px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 text-[10px] font-medium">
+              Flexible
+            </span>
+          )}
+          {settings.full_day_only && (
+            <span className="px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 text-[10px] font-medium">
+              JC uniquement
+            </span>
+          )}
+          {(settings.admin_target ?? 0) > 0 && (
+            <span className="px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 text-[10px] font-medium">
+              Admin: {settings.admin_target}/sem
+            </span>
+          )}
         </div>
       )}
     </div>

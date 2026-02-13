@@ -1,15 +1,13 @@
 "use client";
 
 import { JOUR_LABELS } from "@/lib/constants";
-import { Clock, RotateCcw, Calendar } from "lucide-react";
+import { Clock, RotateCcw } from "lucide-react";
 
 interface ScheduleEntry {
   id_schedule: number;
-  entry_type: string;
   schedule_type: string;
   day_of_week: number | null;
   period: string;
-  specific_date: string | null;
   week_offset: number | null;
   is_active: boolean;
   departments: { name: string } | null;
@@ -21,9 +19,8 @@ interface StaffScheduleViewerProps {
 }
 
 export function StaffScheduleViewer({ schedules }: StaffScheduleViewerProps) {
-  const recurring = schedules.filter((s) => s.entry_type === "RECURRING");
-  const overrides = schedules.filter((s) => s.entry_type === "OVERRIDE");
-  const added = schedules.filter((s) => s.entry_type === "ADDED");
+  // All schedules are now RECURRING (entry_type column removed)
+  const recurring = schedules;
 
   const periodLabel = (p: string) => {
     if (p === "AM") return "Matin";
@@ -39,17 +36,16 @@ export function StaffScheduleViewer({ schedules }: StaffScheduleViewerProps) {
   return (
     <div className="space-y-6">
       <h4 className="text-sm font-semibold text-foreground">
-        Planning récurrent ({schedules.length} entrée{schedules.length !== 1 ? "s" : ""})
+        Planning récurrent ({recurring.length} entrée{recurring.length !== 1 ? "s" : ""})
       </h4>
 
-      {schedules.length === 0 && (
+      {recurring.length === 0 && (
         <div className="text-center py-8 text-muted-foreground">
           <Clock className="w-8 h-8 mx-auto mb-2" />
           <p className="text-sm">Aucun planning défini</p>
         </div>
       )}
 
-      {/* Recurring schedules */}
       {recurring.length > 0 && (
         <div>
           <div className="flex items-center gap-2 mb-2">
@@ -77,65 +73,6 @@ export function StaffScheduleViewer({ schedules }: StaffScheduleViewerProps) {
                   {typeLabel(s.schedule_type)}
                   {s.recurrence_types && ` · ${s.recurrence_types.name}`}
                   {s.week_offset !== null && s.week_offset > 0 && ` (sem. ${s.week_offset + 1})`}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Overrides */}
-      {overrides.length > 0 && (
-        <div>
-          <div className="flex items-center gap-2 mb-2">
-            <Calendar className="w-4 h-4 text-warning" />
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-              Exceptions
-            </p>
-          </div>
-          <div className="space-y-1">
-            {overrides.map((s) => (
-              <div
-                key={s.id_schedule}
-                className="flex items-center gap-3 bg-warning/5 border border-warning/10 rounded-xl px-4 py-2.5 text-sm"
-              >
-                <span className="font-medium text-foreground w-24">
-                  {s.specific_date ?? "—"}
-                </span>
-                <span className="text-muted-foreground w-28">{periodLabel(s.period)}</span>
-                <span className="text-warning font-medium">
-                  {s.departments?.name ?? "Absent"}
-                </span>
-                <span className="text-xs text-muted-foreground ml-auto">
-                  {typeLabel(s.schedule_type)}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Added */}
-      {added.length > 0 && (
-        <div>
-          <div className="flex items-center gap-2 mb-2">
-            <Calendar className="w-4 h-4 text-success" />
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-              Ajouts ponctuels
-            </p>
-          </div>
-          <div className="space-y-1">
-            {added.map((s) => (
-              <div
-                key={s.id_schedule}
-                className="flex items-center gap-3 bg-success/5 border border-success/10 rounded-xl px-4 py-2.5 text-sm"
-              >
-                <span className="font-medium text-foreground w-24">
-                  {s.specific_date ?? "—"}
-                </span>
-                <span className="text-muted-foreground w-28">{periodLabel(s.period)}</span>
-                <span className="text-success font-medium">
-                  {s.departments?.name ?? "—"}
                 </span>
               </div>
             ))}
