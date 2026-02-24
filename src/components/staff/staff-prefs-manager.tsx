@@ -135,11 +135,8 @@ export function StaffPrefsManager({ staffId, preferences }: StaffPrefsManagerPro
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h4 className="text-sm font-semibold text-foreground">
-          Préférences ({preferences.length})
-        </h4>
-        {!showForm && (
+      {!showForm && (
+        <div className="flex items-center justify-end">
           <button
             onClick={() => setShowForm(true)}
             className="flex items-center gap-1 text-sm text-primary hover:text-primary-hover"
@@ -147,8 +144,8 @@ export function StaffPrefsManager({ staffId, preferences }: StaffPrefsManagerPro
             <Plus className="w-4 h-4" />
             Ajouter
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       {preferences.length === 0 && !showForm && (
         <p className="text-sm text-muted-foreground italic">Aucune préférence définie</p>
@@ -159,7 +156,7 @@ export function StaffPrefsManager({ staffId, preferences }: StaffPrefsManagerPro
         {preferences.map((pref) => (
           <div
             key={pref.id_preference}
-            className={`flex items-center justify-between rounded-xl border px-4 py-2.5 ${prefColor(
+            className={`flex items-center justify-between rounded-xl border px-4 py-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.03)] ${prefColor(
               pref.preference
             )}`}
           >

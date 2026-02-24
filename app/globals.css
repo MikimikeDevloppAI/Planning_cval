@@ -2,9 +2,9 @@
 
 @theme {
   /* ---- CVAL Design System Colors ---- */
-  --color-primary: hsl(199 89% 48%);
-  --color-primary-hover: hsl(199 89% 42%);
-  --color-primary-light: hsl(199 89% 95%);
+  --color-primary: #4A6FA5;
+  --color-primary-hover: #3d5f91;
+  --color-primary-light: #eef3f9;
   --color-primary-foreground: #ffffff;
 
   --color-secondary: hsl(160 84% 39%);
@@ -27,7 +27,7 @@
 
   --color-border: hsl(220 13% 91%);
   --color-input: hsl(220 13% 91%);
-  --color-ring: hsl(199 89% 48%);
+  --color-ring: #4A6FA5;
 
   --color-accent: hsl(220 14% 96%);
   --color-accent-foreground: hsl(220 13% 18%);
@@ -45,8 +45,8 @@
   /* Sidebar */
   --color-sidebar-bg: #ffffff;
   --color-sidebar-foreground: hsl(220 13% 18%);
-  --color-sidebar-primary: hsl(199 89% 48%);
-  --color-sidebar-accent: hsl(199 89% 96%);
+  --color-sidebar-primary: #4A6FA5;
+  --color-sidebar-accent: #eef3f9;
   --color-sidebar-border: hsl(220 13% 91%);
 
   /* Role colors (kept for planning grid) */
@@ -139,46 +139,71 @@ body {
   background-color: hsl(220 13% 65%);
 }
 
-/* ── Planning chip classes — Modern glass SaaS style ── */
+/* ── Planning chip classes — Editorial contrast style ── */
 
-.chip-doctor {
-  background: #eff6ff;
-  border: 1px solid rgba(147,197,253,0.35);
-  box-shadow: var(--shadow-chip);
-}
-.chip-doctor:hover {
-  background: #dbeafe;
-  border-color: rgba(147,197,253,0.55);
-  box-shadow: var(--shadow-chip-hover);
-  transform: translateY(-1px);
+@layer components {
+  /* Médecin — Bleu Nuit Profond */
+  .chip-doctor {
+    background: #4A6FA5 !important;
+    border: 1px solid rgba(0,0,0,0.1) !important;
+    box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.08);
+  }
+  .chip-doctor:hover {
+    background: #5a7fb5 !important;
+    border-color: rgba(0,0,0,0.25) !important;
+    box-shadow: 0 4px 12px -2px rgb(0 0 0 / 0.15), 0 1px 3px 0 rgb(0 0 0 / 0.08);
+    transform: translateY(-1px);
+  }
+
+  /* Secrétaire — Blanc Cassé / Perle */
+  .chip-secretary {
+    background: #F8F9FA !important;
+    border: 1px solid #D1D5DB !important;
+    box-shadow: var(--shadow-chip);
+  }
+  .chip-secretary:hover {
+    background: #F1F3F5 !important;
+    border-color: #B8BFC6 !important;
+    box-shadow: var(--shadow-chip-hover);
+    transform: translateY(-1px);
+  }
+
+  /* Absence — rose poudré */
+  .chip-absence {
+    background: #f9f0f1 !important;
+    border: 1px solid rgba(180,130,135,0.2) !important;
+    box-shadow: var(--shadow-chip);
+  }
+  .chip-absence:hover {
+    background: #f3e6e8 !important;
+    border-color: rgba(180,130,135,0.35) !important;
+    box-shadow: var(--shadow-chip-hover);
+    transform: translateY(-1px);
+  }
+
+  .chip-overlay {
+    background: #f8f9fa !important;
+    border: 1px solid rgba(0,0,0,0.06) !important;
+    box-shadow: var(--shadow-chip-overlay);
+  }
 }
 
-.chip-secretary {
-  background: #ecfdf5;
-  border: 1px solid rgba(134,239,172,0.35);
-  box-shadow: var(--shadow-chip);
-}
-.chip-secretary:hover {
-  background: #dcfce7;
-  border-color: rgba(134,239,172,0.55);
-  box-shadow: var(--shadow-chip-hover);
-  transform: translateY(-1px);
+/* ── Staff page animations ── */
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
-.chip-absence {
-  background: #fff1f2;
-  border: 1px solid rgba(253,164,175,0.35);
-  box-shadow: var(--shadow-chip);
-}
-.chip-absence:hover {
-  background: #ffe4e6;
-  border-color: rgba(253,164,175,0.55);
-  box-shadow: var(--shadow-chip-hover);
-  transform: translateY(-1px);
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
 }
 
-.chip-overlay {
-  background: linear-gradient(to bottom right, rgba(255,255,255,0.96), rgba(248,250,252,0.92));
-  border: 1px solid rgba(0,0,0,0.06);
-  box-shadow: var(--shadow-chip-overlay);
+.animate-fade-in-up {
+  animation: fadeInUp 0.4s ease-out both;
+}
+
+.animate-pulse-dot {
+  animation: pulse-dot 2s ease-in-out infinite;
 }

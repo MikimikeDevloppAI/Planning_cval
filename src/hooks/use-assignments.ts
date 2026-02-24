@@ -7,6 +7,7 @@ import {
   moveDoctorSchedule as moveDoctorScheduleQuery,
   cancelAssignment as cancelAssignmentQuery,
   updateAssignmentStatus as updateAssignmentStatusQuery,
+  swapAssignments as swapAssignmentsQuery,
 } from "@/lib/supabase/queries";
 import type { PlanningData, PlanningAssignment } from "@/lib/types/database";
 
@@ -318,6 +319,41 @@ export function useUpdateAssignmentStatus() {
     mutationFn: (params: UpdateStatusParams) =>
       updateAssignmentStatusQuery(supabase, params.id_assignment, params.status),
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["planning"] });
+    },
+  });
+}
+
+interface SwapAssignmentSide {
+  assignmentId: number;
+  blockId: number;
+  staffId: number;
+  type: string;
+  roleId: number | null;
+  skillId: number | null;
+}
+
+interface SwapAssignmentsParams {
+  a: SwapAssignmentSide;
+  b: SwapAssignmentSide;
+}
+
+export function useSwapAssignments() {
+  const queryClient = useQueryClient();
+  const supabase = createClient();
+
+  return useMutation({
+    mutationFn: (params: SwapAssignmentsParams) =>
+      swapAssignmentsQuery(supabase, params.a, params.b),
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: ["planning"] });
+      const snapshots = snapshotQueries(queryClient);
+      return { snapshots };
+    },
+    onError: (_err, _params, context) => {
+      if (context?.snapshots) rollbackQueries(queryClient, context.snapshots);
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["planning"] });
     },
   });

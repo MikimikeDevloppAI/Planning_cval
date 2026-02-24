@@ -272,7 +272,7 @@ export async function fetchStaffDetail(supabase: SupabaseClient, id: number) {
   const staff = throwIfError(staffRes);
 
   return {
-    ...staff,
+    staff,
     skills: skillsRes.data ?? [],
     preferences: prefsRes.data ?? [],
     settings: settingsRes.data ?? null,
@@ -587,6 +587,51 @@ export async function moveDoctorSchedule(
       )
       .select()
       .single()
+  );
+}
+
+/**
+ * Swap two assignments: cancel both originals, upsert each person into the other's block.
+ */
+export async function swapAssignments(
+  supabase: SupabaseClient,
+  a: { assignmentId: number; blockId: number; staffId: number; type: string; roleId: number | null; skillId: number | null },
+  b: { assignmentId: number; blockId: number; staffId: number; type: string; roleId: number | null; skillId: number | null },
+) {
+  // Cancel both originals
+  await cancelAssignment(supabase, a.assignmentId);
+  await cancelAssignment(supabase, b.assignmentId);
+
+  // A → block of B
+  throwIfError(
+    await supabase.from("assignments").upsert(
+      {
+        id_block: b.blockId,
+        id_staff: a.staffId,
+        assignment_type: a.type,
+        id_role: a.roleId,
+        id_skill: a.skillId,
+        source: "MANUAL",
+        status: "PROPOSED",
+      },
+      { onConflict: "id_block,id_staff" }
+    ).select().single()
+  );
+
+  // B → block of A
+  throwIfError(
+    await supabase.from("assignments").upsert(
+      {
+        id_block: a.blockId,
+        id_staff: b.staffId,
+        assignment_type: b.type,
+        id_role: b.roleId,
+        id_skill: b.skillId,
+        source: "MANUAL",
+        status: "PROPOSED",
+      },
+      { onConflict: "id_block,id_staff" }
+    ).select().single()
   );
 }
 
@@ -986,53 +1031,18 @@ function extractVirtualSites(
     sites.push({ id_site: siteId, name: siteData.name, departments });
   }
 
-  // Bloc Opératoire last — group by doctor assignment activity
+  // Bloc Opératoire last — all sub-blocks together under one department
   if (surgeryBlocks.length > 0) {
-    const byActivity = new Map<string, RawBlock[]>();
-    for (const block of surgeryBlocks) {
-      // Find activities from doctor assignments in this block
-      const doctorActivities = new Set<string>();
-      for (const a of block.assignments ?? []) {
-        if (
-          a.assignment_type === "DOCTOR" &&
-          a.status !== "CANCELLED" &&
-          a.status !== "INVALIDATED" &&
-          a.activity_templates?.name
-        ) {
-          doctorActivities.add(a.activity_templates.name);
-        }
-      }
-
-      if (doctorActivities.size === 0) {
-        // Block with no active doctor activities — show under generic name
-        const key = "Bloc opératoire";
-        if (!byActivity.has(key)) byActivity.set(key, []);
-        byActivity.get(key)!.push(block);
-      } else {
-        // Show under each activity that has a doctor
-        for (const actName of doctorActivities) {
-          if (!byActivity.has(actName)) byActivity.set(actName, []);
-          byActivity.get(actName)!.push(block);
-        }
-      }
-    }
-
-    const blocDepts: PlanningDepartment[] = [];
-    let virtualId = -1000;
-    for (const [actName, blocks] of Array.from(byActivity.entries()).sort(
-      (a, b) => a[0].localeCompare(b[0])
-    )) {
-      blocDepts.push({
-        id_department: virtualId--,
-        name: actName,
-        days: buildDays(blocks),
-      });
-    }
-
     sites.push({
       id_site: -1,
       name: "Bloc Opératoire",
-      departments: blocDepts,
+      departments: [
+        {
+          id_department: -1000,
+          name: "Bloc opératoire",
+          days: buildDays(surgeryBlocks),
+        },
+      ],
     });
   }
 

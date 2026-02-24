@@ -19,18 +19,20 @@ import { fr } from "date-fns/locale";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+interface WorkBlock {
+  date: string;
+  period: string;
+  block_type: string;
+  departments: { name: string } | { name: string }[] | null;
+}
+
 interface AssignmentEntry {
   id_assignment: number;
   assignment_type: string;
   id_role: number | null;
   status: string;
-  work_blocks: {
-    date: string;
-    period: string;
-    block_type: string;
-    departments: { name: string } | null;
-  } | null;
-  secretary_roles: { name: string } | null;
+  work_blocks: WorkBlock | WorkBlock[] | null;
+  secretary_roles: { name: string } | { name: string }[] | null;
 }
 
 interface LeaveEntry {
@@ -39,8 +41,16 @@ interface LeaveEntry {
   period: "AM" | "PM" | null;
 }
 
+/** Normalize a Supabase join that might return object or array */
+function unwrap<T>(val: T | T[] | null): T | null {
+  if (val == null) return null;
+  if (Array.isArray(val)) return val[0] ?? null;
+  return val;
+}
+
 interface StaffCalendarProps {
-  assignments: AssignmentEntry[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  assignments: any[];
   leaves: LeaveEntry[];
 }
 
@@ -55,7 +65,8 @@ export function StaffCalendar({ assignments, leaves }: StaffCalendarProps) {
 
   // Index assignments by date
   const assignmentsByDate = useMemo(() => {
-    const map = new Map<string, { am: AssignmentEntry[]; pm: AssignmentEntry[] }>();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const map = new Map<string, { am: any[]; pm: any[] }>();
     for (const a of assignments) {
       if (!a.work_blocks) continue;
       const dateStr = a.work_blocks.date;
@@ -86,11 +97,11 @@ export function StaffCalendar({ assignments, leaves }: StaffCalendarProps) {
   }, [leaves]);
 
   const getRoleColor = (roleId: number | null, type: string) => {
-    if (type === "DOCTOR") return "bg-sky-200";
-    if (roleId === 1) return "bg-emerald-200";
-    if (roleId === 2) return "bg-pink-200";
-    if (roleId === 3) return "bg-amber-200";
-    return "bg-muted-foreground/30";
+    if (type === "DOCTOR") return "bg-[#4A6FA5]/20";
+    if (roleId === 1) return "bg-[#6B8A7A]/20";
+    if (roleId === 2) return "bg-[#D4838A]/20";
+    if (roleId === 3) return "bg-[#D4A853]/20";
+    return "bg-muted-foreground/20";
   };
 
   const today = new Date();
@@ -234,21 +245,21 @@ export function StaffCalendar({ assignments, leaves }: StaffCalendarProps) {
       </div>
 
       {/* Legend */}
-      <div className="flex flex-wrap items-center gap-3 mt-3 bg-muted/30 rounded-lg p-2.5 text-xs text-muted-foreground">
+      <div className="flex flex-wrap items-center gap-3 mt-3 bg-muted/30 rounded-xl p-3 text-xs text-muted-foreground">
         <div className="flex items-center gap-1.5">
-          <div className="w-3 h-3 rounded-sm bg-sky-200" />
+          <div className="w-3 h-3 rounded-sm bg-[#4A6FA5]/20 border border-[#4A6FA5]/30" />
           Médecin
         </div>
         <div className="flex items-center gap-1.5">
-          <div className="w-3 h-3 rounded-sm bg-emerald-200" />
+          <div className="w-3 h-3 rounded-sm bg-[#6B8A7A]/20 border border-[#6B8A7A]/30" />
           Standard
         </div>
         <div className="flex items-center gap-1.5">
-          <div className="w-3 h-3 rounded-sm bg-pink-200" />
+          <div className="w-3 h-3 rounded-sm bg-[#D4838A]/20 border border-[#D4838A]/30" />
           Fermeture
         </div>
         <div className="flex items-center gap-1.5">
-          <div className="w-3 h-3 rounded-sm bg-amber-200" />
+          <div className="w-3 h-3 rounded-sm bg-[#D4A853]/20 border border-[#D4A853]/30" />
           Aide ferm.
         </div>
         <div className="flex items-center gap-1.5">

@@ -1,6 +1,6 @@
 /**
  * Position color configurations for staff members.
- * All values are complete, static Tailwind class strings (Tailwind 4 JIT compatible).
+ * Harmonized palette based on primary #4A6FA5.
  */
 
 export interface PositionColors {
@@ -11,38 +11,46 @@ export interface PositionColors {
   badge: string;
   ring: string;
   gradient: string;
+  hex: string;
+  hexLight: string;
 }
 
 const POSITION_COLORS: Record<number, PositionColors> = {
   1: {
-    // Médecin
-    bg: "bg-sky-50/50",
-    text: "text-sky-700",
-    border: "border-sky-200",
-    avatar: "bg-sky-100 text-sky-700",
-    badge: "bg-sky-100 text-sky-700",
-    ring: "ring-sky-300",
-    gradient: "from-sky-400 to-blue-500",
+    // Médecin — Navy (= primary)
+    bg: "bg-[#EEF3F9]",
+    text: "text-[#2C5282]",
+    border: "border-[#B8CCE4]",
+    avatar: "bg-[#4A6FA5] text-white",
+    badge: "bg-[#EEF3F9] text-[#2C5282] border border-[#B8CCE4]",
+    ring: "ring-[#7FA3CF]",
+    gradient: "from-[#4A6FA5] to-[#3B5998]",
+    hex: "#4A6FA5",
+    hexLight: "#EEF3F9",
   },
   2: {
-    // Secrétaire
-    bg: "bg-emerald-50/50",
-    text: "text-emerald-700",
-    border: "border-emerald-200",
-    avatar: "bg-emerald-100 text-emerald-700",
-    badge: "bg-emerald-100 text-emerald-700",
-    ring: "ring-emerald-300",
-    gradient: "from-emerald-400 to-green-500",
+    // Secrétaire — Sage/Teal
+    bg: "bg-[#F0F5F3]",
+    text: "text-[#3D5A4C]",
+    border: "border-[#C2D4CB]",
+    avatar: "bg-[#6B8A7A] text-white",
+    badge: "bg-[#F0F5F3] text-[#3D5A4C] border border-[#C2D4CB]",
+    ring: "ring-[#9BB5A8]",
+    gradient: "from-[#6B8A7A] to-[#5A7A6A]",
+    hex: "#6B8A7A",
+    hexLight: "#F0F5F3",
   },
   3: {
-    // Obstétricienne
-    bg: "bg-purple-50/50",
-    text: "text-purple-700",
-    border: "border-purple-200",
-    avatar: "bg-purple-100 text-purple-700",
-    badge: "bg-purple-100 text-purple-700",
-    ring: "ring-purple-300",
-    gradient: "from-purple-400 to-violet-500",
+    // Obstétricienne — Mauve
+    bg: "bg-[#F5F0F7]",
+    text: "text-[#6B4C7A]",
+    border: "border-[#D4C2DD]",
+    avatar: "bg-[#9B7BA8] text-white",
+    badge: "bg-[#F5F0F7] text-[#6B4C7A] border border-[#D4C2DD]",
+    ring: "ring-[#BFA5CB]",
+    gradient: "from-[#9B7BA8] to-[#8B6B98]",
+    hex: "#9B7BA8",
+    hexLight: "#F5F0F7",
   },
 };
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { JOUR_LABELS } from "@/lib/constants";
-import { Clock, RotateCcw } from "lucide-react";
+import { Clock, Sun, Moon } from "lucide-react";
 
 interface ScheduleEntry {
   id_schedule: number;
@@ -19,66 +19,77 @@ interface StaffScheduleViewerProps {
 }
 
 export function StaffScheduleViewer({ schedules }: StaffScheduleViewerProps) {
-  // All schedules are now RECURRING (entry_type column removed)
   const recurring = schedules;
 
-  const periodLabel = (p: string) => {
-    if (p === "AM") return "Matin";
-    if (p === "PM") return "Après-midi";
-    return "Journée complète";
-  };
-
-  const typeLabel = (t: string) => {
-    if (t === "FIXED") return "Fixe";
-    return "Disponible";
-  };
+  if (recurring.length === 0) {
+    return (
+      <div className="text-center py-6 text-muted-foreground">
+        <div className="w-12 h-12 rounded-2xl bg-muted/30 flex items-center justify-center mx-auto mb-2">
+          <Clock className="w-6 h-6" />
+        </div>
+        <p className="text-sm">Aucun planning défini</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6">
-      <h4 className="text-sm font-semibold text-foreground">
-        Planning récurrent ({recurring.length} entrée{recurring.length !== 1 ? "s" : ""})
-      </h4>
+    <div className="space-y-1.5">
+      {recurring.map((s) => {
+        const isAM = s.period === "AM";
+        const isPM = s.period === "PM";
+        const isFixed = s.schedule_type === "FIXED";
 
-      {recurring.length === 0 && (
-        <div className="text-center py-8 text-muted-foreground">
-          <Clock className="w-8 h-8 mx-auto mb-2" />
-          <p className="text-sm">Aucun planning défini</p>
-        </div>
-      )}
+        return (
+          <div
+            key={s.id_schedule}
+            className="flex items-center gap-2.5 rounded-lg px-3 py-2 hover:bg-muted/30 transition-colors group"
+          >
+            {/* Period icon */}
+            <div
+              className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
+              style={{
+                backgroundColor: isAM ? "#eab30815" : isPM ? "#d9770615" : "#4A6FA510",
+              }}
+            >
+              {isAM ? (
+                <Sun className="w-3.5 h-3.5" style={{ color: "#eab308" }} />
+              ) : isPM ? (
+                <Moon className="w-3.5 h-3.5" style={{ color: "#d97706" }} />
+              ) : (
+                <Clock className="w-3.5 h-3.5 text-primary" />
+              )}
+            </div>
 
-      {recurring.length > 0 && (
-        <div>
-          <div className="flex items-center gap-2 mb-2">
-            <RotateCcw className="w-4 h-4 text-primary" />
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-              Récurrent
-            </p>
+            {/* Day */}
+            <span className="text-sm font-medium text-foreground w-16 shrink-0">
+              {s.day_of_week !== null
+                ? (JOUR_LABELS[s.day_of_week] ?? `J${s.day_of_week}`).slice(0, 3)
+                : "—"}
+            </span>
+
+            {/* Period label */}
+            <span className="text-xs text-muted-foreground w-8 shrink-0">
+              {isAM ? "AM" : isPM ? "PM" : "JC"}
+            </span>
+
+            {/* Department */}
+            <span className="text-sm font-medium text-primary truncate flex-1">
+              {s.departments?.name ?? "—"}
+            </span>
+
+            {/* Type badge */}
+            <span
+              className="text-[10px] font-medium rounded-full px-2 py-0.5 shrink-0"
+              style={{
+                backgroundColor: isFixed ? "#EEF3F9" : "#F0F5F3",
+                color: isFixed ? "#4A6FA5" : "#6B8A7A",
+              }}
+            >
+              {isFixed ? "Fixe" : "Dispo"}
+            </span>
           </div>
-          <div className="space-y-1">
-            {recurring.map((s) => (
-              <div
-                key={s.id_schedule}
-                className="flex items-center gap-3 bg-primary/5 border border-primary/10 rounded-xl px-4 py-2.5 text-sm"
-              >
-                <span className="font-medium text-foreground w-24">
-                  {s.day_of_week !== null
-                    ? JOUR_LABELS[s.day_of_week] ?? `Jour ${s.day_of_week}`
-                    : "—"}
-                </span>
-                <span className="text-muted-foreground w-28">{periodLabel(s.period)}</span>
-                <span className="text-primary font-medium">
-                  {s.departments?.name ?? "—"}
-                </span>
-                <span className="text-xs text-muted-foreground ml-auto">
-                  {typeLabel(s.schedule_type)}
-                  {s.recurrence_types && ` · ${s.recurrence_types.name}`}
-                  {s.week_offset !== null && s.week_offset > 0 && ` (sem. ${s.week_offset + 1})`}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+        );
+      })}
     </div>
   );
 }

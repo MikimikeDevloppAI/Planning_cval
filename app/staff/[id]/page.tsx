@@ -1,10 +1,9 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { format } from "date-fns";
 import { useStaffDetail } from "@/hooks/use-staff";
-import { getPositionColors } from "@/lib/utils/position-colors";
 import { StaffCard } from "@/components/staff/staff-card";
 import { StaffCalendar } from "@/components/staff/staff-calendar";
 import { StaffSkillsManager } from "@/components/staff/staff-skills-manager";
@@ -18,21 +17,10 @@ import {
   Calendar,
   Award,
   Heart,
-  Settings,
   CalendarOff,
   Clock,
+  Settings,
 } from "lucide-react";
-
-const TABS = [
-  { id: "calendar", label: "Calendrier", icon: Calendar },
-  { id: "skills", label: "Compétences", icon: Award },
-  { id: "prefs", label: "Préférences", icon: Heart },
-  { id: "settings", label: "Paramètres", icon: Settings },
-  { id: "leaves", label: "Congés", icon: CalendarOff },
-  { id: "schedule", label: "Planning", icon: Clock },
-] as const;
-
-type TabId = (typeof TABS)[number]["id"];
 
 // ─── Quick stat card ─────────────────────────────────────
 
@@ -40,51 +28,73 @@ function QuickStat({
   icon,
   label,
   value,
-  gradient,
+  color,
 }: {
   icon: React.ReactNode;
   label: string;
   value: number;
-  gradient: string;
+  color: string;
 }) {
   return (
     <div
       className={cn(
-        "relative overflow-hidden rounded-xl p-4",
-        "bg-card border border-border/50",
+        "relative overflow-hidden rounded-2xl p-4",
+        "bg-card border border-border/40",
         "shadow-[0_1px_3px_rgba(0,0,0,0.04)]",
-        "hover:shadow-[0_4px_12px_rgba(0,0,0,0.06)]",
-        "transition-all duration-200"
+        "hover:shadow-[0_8px_20px_rgba(0,0,0,0.06)]",
+        "transition-all duration-300 group"
       )}
     >
       <div
-        className={cn(
-          "absolute -top-8 -right-8 w-24 h-24 rounded-full blur-2xl opacity-10",
-          "bg-gradient-to-br",
-          gradient
-        )}
+        className="absolute -top-6 -right-6 w-20 h-20 rounded-full blur-2xl group-hover:opacity-[0.12] transition-opacity"
+        style={{ backgroundColor: color, opacity: 0.08 }}
       />
       <div className="relative flex items-center gap-3">
         <div
-          className={cn(
-            "p-2 rounded-lg bg-gradient-to-br text-white",
-            gradient
-          )}
+          className="p-2.5 rounded-xl text-white shadow-sm"
+          style={{ backgroundColor: color }}
         >
           {icon}
         </div>
         <div>
-          <p className="text-xs text-muted-foreground">{label}</p>
-          <p
-            className={cn(
-              "text-xl font-bold bg-gradient-to-r bg-clip-text text-transparent",
-              gradient
-            )}
-          >
+          <p className="text-xs text-muted-foreground font-medium">{label}</p>
+          <p className="text-2xl font-bold" style={{ color }}>
             {value}
           </p>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ─── Section wrapper ─────────────────────────────────────
+
+function SectionCard({
+  title,
+  icon: Icon,
+  children,
+  className,
+  scrollable,
+}: {
+  title: string;
+  icon: React.ElementType;
+  children: React.ReactNode;
+  className?: string;
+  scrollable?: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        "bg-card rounded-2xl border border-border/40 shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden",
+        scrollable && "flex flex-col",
+        className
+      )}
+    >
+      <div className="flex items-center gap-2 px-5 py-3.5 border-b border-border/30 shrink-0">
+        <Icon className="w-4 h-4 text-primary" />
+        <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+      </div>
+      <div className={cn("p-5", scrollable && "overflow-y-auto flex-1")}>{children}</div>
     </div>
   );
 }
@@ -95,7 +105,6 @@ export default function StaffDetailPage() {
   const params = useParams();
   const staffId = params.id ? parseInt(params.id as string) : null;
   const { data, isLoading, error } = useStaffDetail(staffId);
-  const [activeTab, setActiveTab] = useState<TabId>("calendar");
 
   if (isLoading) {
     return (
@@ -117,17 +126,12 @@ export default function StaffDetailPage() {
   const { staff, skills, preferences, settings, leaves, schedules, assignments } =
     data;
 
-  const colors = getPositionColors(staff.id_primary_position);
-
-  // Only show settings tab for secretaries (position 2)
-  const visibleTabs =
-    staff.id_primary_position === 2
-      ? TABS
-      : TABS.filter((t) => t.id !== "settings");
+  const isSecretary = staff.id_primary_position === 2;
 
   return (
     <div className="h-full overflow-auto p-6">
-      <div className="max-w-5xl mx-auto">
+      <div className="max-w-6xl mx-auto">
+        {/* Profile header */}
         <StaffCard staff={staff} />
 
         {/* Quick stats */}
@@ -136,55 +140,54 @@ export default function StaffDetailPage() {
           leaves={leaves}
           skills={skills}
           preferences={preferences}
+          isSecretary={isSecretary}
         />
 
-        {/* Tabs */}
-        <div className="bg-card rounded-xl shadow-soft border border-border/50 overflow-hidden">
-          <div className="border-b border-border/30">
-            <nav className="flex overflow-x-auto">
-              {visibleTabs.map((tab) => {
-                const Icon = tab.icon;
-                return (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
-                    className={cn(
-                      "flex items-center gap-1.5 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap",
-                      activeTab === tab.id
-                        ? cn("text-foreground", colors.border)
-                        : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"
-                    )}
-                  >
-                    <Icon className="w-4 h-4" />
-                    {tab.label}
-                  </button>
-                );
-              })}
-            </nav>
-          </div>
-
-          <div className="p-6">
-            {activeTab === "calendar" && (
-              <StaffCalendar assignments={assignments} leaves={leaves} />
-            )}
-            {activeTab === "skills" && (
+        {/* Secretary-specific sections — above calendar */}
+        {isSecretary && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
+            {/* Compétences */}
+            <SectionCard title="Compétences" icon={Award}>
               <StaffSkillsManager staffId={staff.id_staff} skills={skills} />
-            )}
-            {activeTab === "prefs" && (
+            </SectionCard>
+
+            {/* Préférences */}
+            <SectionCard title="Préférences" icon={Heart}>
               <StaffPrefsManager
                 staffId={staff.id_staff}
                 preferences={preferences}
               />
-            )}
-            {activeTab === "settings" && staff.id_primary_position === 2 && (
+            </SectionCard>
+
+            {/* Paramètres */}
+            <SectionCard title="Paramètres" icon={Settings}>
               <StaffSettings staffId={staff.id_staff} settings={settings} />
-            )}
-            {activeTab === "leaves" && (
+            </SectionCard>
+          </div>
+        )}
+
+        {/* Dashboard grid: Calendar (2/3) + Sidebar (1/3) */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          {/* Calendar — takes 2 columns */}
+          <SectionCard
+            title="Calendrier"
+            icon={Calendar}
+            className="lg:col-span-2"
+          >
+            <StaffCalendar assignments={assignments} leaves={leaves} />
+          </SectionCard>
+
+          {/* Sidebar — stacked cards (fixed height, scrollable) */}
+          <div className="space-y-4 flex flex-col">
+            {/* Congés */}
+            <SectionCard title="Congés & Absences" icon={CalendarOff} scrollable className="max-h-[340px]">
               <StaffLeaveManager staffId={staff.id_staff} leaves={leaves} />
-            )}
-            {activeTab === "schedule" && (
+            </SectionCard>
+
+            {/* Planning récurrent */}
+            <SectionCard title="Planning récurrent" icon={Clock} scrollable className="max-h-[340px]">
               <StaffScheduleViewer schedules={schedules} />
-            )}
+            </SectionCard>
           </div>
         </div>
       </div>
@@ -199,15 +202,18 @@ function StatsRow({
   leaves,
   skills,
   preferences,
+  isSecretary,
 }: {
-  assignments: { work_blocks: { date: string } | null }[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  assignments: any[];
   leaves: { end_date: string }[];
   skills: unknown[];
   preferences: unknown[];
+  isSecretary: boolean;
 }) {
   const currentMonthAssignments = useMemo(() => {
     const monthStr = format(new Date(), "yyyy-MM");
-    return assignments.filter((a) =>
+    return assignments.filter((a: { work_blocks?: { date?: string } }) =>
       a.work_blocks?.date?.startsWith(monthStr)
     ).length;
   }, [assignments]);
@@ -218,31 +224,35 @@ function StatsRow({
   }, [leaves]);
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+    <div className={cn("grid gap-3 mb-6", isSecretary ? "grid-cols-2 md:grid-cols-4" : "grid-cols-2")}>
       <QuickStat
         icon={<Calendar className="w-4 h-4" />}
         label="Assignations ce mois"
         value={currentMonthAssignments}
-        gradient="from-cyan-500 to-blue-600"
+        color="#4A6FA5"
       />
       <QuickStat
         icon={<CalendarOff className="w-4 h-4" />}
         label="Congés à venir"
         value={upcomingLeaves}
-        gradient="from-amber-500 to-orange-600"
+        color="#D97706"
       />
-      <QuickStat
-        icon={<Award className="w-4 h-4" />}
-        label="Compétences"
-        value={skills.length}
-        gradient="from-emerald-500 to-green-600"
-      />
-      <QuickStat
-        icon={<Heart className="w-4 h-4" />}
-        label="Préférences"
-        value={preferences.length}
-        gradient="from-violet-500 to-purple-600"
-      />
+      {isSecretary && (
+        <>
+          <QuickStat
+            icon={<Award className="w-4 h-4" />}
+            label="Compétences"
+            value={skills.length}
+            color="#6B8A7A"
+          />
+          <QuickStat
+            icon={<Heart className="w-4 h-4" />}
+            label="Préférences"
+            value={preferences.length}
+            color="#9B7BA8"
+          />
+        </>
+      )}
     </div>
   );
 }

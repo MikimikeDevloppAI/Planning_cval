@@ -16,13 +16,16 @@ import {
 } from "@dnd-kit/core";
 import { format, isToday, isMonday, parseISO } from "date-fns";
 import { fr } from "date-fns/locale";
-import { UserCircle2, CalendarOff, Check, Send, XCircle } from "lucide-react";
+import { UserCircle2, CalendarOff, Check, Send, XCircle, Move, ArrowLeftRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { buildInitialsMap } from "@/lib/utils/initials";
-import { useAppStore } from "@/store/use-app-store";
+
 import { useMoveAssignment, useMoveDoctorSchedule, useCancelAssignment, useUpdateAssignmentStatus } from "@/hooks/use-assignments";
 import { Popover } from "@/components/ui/popover";
 import { DropdownMenu } from "@/components/ui/dropdown-menu";
+import { QuickAbsenceDialog } from "@/components/dialogs/quick-absence-dialog";
+import { MoveAssignmentDialog } from "@/components/dialogs/move-assignment-dialog";
+import { SwapAssignmentDialog } from "@/components/dialogs/swap-assignment-dialog";
 import type {
   PlanningSite,
   PlanningBlock,
@@ -39,6 +42,7 @@ const ROLE_TAG: Record<number, string> = {
 
 /** Fixed width for the first column */
 const COL1 = "w-[180px] min-w-[180px] max-w-[180px]";
+const COL1_SHADOW = "2px 0 0 0 #cbd5e1"; // persistent right border via box-shadow (survives sticky scroll)
 
 /** Border-left for week separators — subtle left border on Monday columns */
 function weekSepStyle(isWkStart: boolean, isFirstCol: boolean): React.CSSProperties | undefined {
@@ -172,7 +176,7 @@ function mergeAssignments(amBlocks: PlanningBlock[], pmBlocks: PlanningBlock[]):
 export function DepartmentsTableView({ days, sites, leaves = [] }: DepartmentsTableViewProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
-  const openAbsence = useAppStore((s) => s.openAbsenceDialog);
+
 
   const moveAssignment = useMoveAssignment();
   const moveDoctorSchedule = useMoveDoctorSchedule();
@@ -194,7 +198,20 @@ export function DepartmentsTableView({ days, sites, leaves = [] }: DepartmentsTa
   const [chipMenu, setChipMenu] = useState<{
     person: DayPerson;
     date: string;
+    deptId: number;
+    deptName: string;
     anchor: DOMRect;
+  } | null>(null);
+
+  // Dialog states
+  const [quickAbsence, setQuickAbsence] = useState<{
+    staffId: number; staffName: string; date: string; period: "AM" | "PM" | "FULL";
+  } | null>(null);
+  const [moveDialog, setMoveDialog] = useState<{
+    person: DayPerson; date: string; deptId: number; deptName: string;
+  } | null>(null);
+  const [swapDialog, setSwapDialog] = useState<{
+    person: DayPerson; date: string; deptId: number; deptName: string;
   } | null>(null);
 
   // Pending drop: FULL day person needs user to choose AM/PM/FULL
@@ -387,7 +404,7 @@ export function DepartmentsTableView({ days, sites, leaves = [] }: DepartmentsTa
   // Build chip menu actions
   const chipMenuSections = useMemo(() => {
     if (!chipMenu) return [];
-    const { person, date } = chipMenu;
+    const { person, date, deptId, deptName } = chipMenu;
 
     const mainItems = [
       {
@@ -398,7 +415,22 @@ export function DepartmentsTableView({ days, sites, leaves = [] }: DepartmentsTa
       {
         label: "Déclarer absence",
         icon: CalendarOff,
-        onClick: () => openAbsence({ staffId: person.id_staff, date }),
+        onClick: () => setQuickAbsence({
+          staffId: person.id_staff,
+          staffName: `${person.firstname} ${person.lastname}`,
+          date,
+          period: person.period,
+        }),
+      },
+      {
+        label: "Déplacer",
+        icon: Move,
+        onClick: () => setMoveDialog({ person, date, deptId, deptName }),
+      },
+      {
+        label: "Échanger",
+        icon: ArrowLeftRight,
+        onClick: () => setSwapDialog({ person, date, deptId, deptName }),
       },
     ];
 
@@ -436,7 +468,7 @@ export function DepartmentsTableView({ days, sites, leaves = [] }: DepartmentsTa
       sections.push({ items: dangerItems });
     }
     return sections;
-  }, [chipMenu, router, openAbsence, updateStatus, cancelAssignment]);
+  }, [chipMenu, router, updateStatus, cancelAssignment]);
 
   if (sites.length === 0) {
     return (
@@ -457,9 +489,10 @@ export function DepartmentsTableView({ days, sites, leaves = [] }: DepartmentsTa
             <tr>
               <th
                 className={cn(
-                  "sticky left-0 z-40 bg-slate-50 border-b border-r border-slate-200 px-4 py-2.5 text-left",
+                  "sticky left-0 z-40 bg-slate-50 border-b border-b-slate-200 px-4 py-2.5 text-left",
                   COL1
                 )}
+                style={{ boxShadow: COL1_SHADOW }}
               >
                 <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
                   Département
@@ -499,151 +532,113 @@ export function DepartmentsTableView({ days, sites, leaves = [] }: DepartmentsTa
           </thead>
 
           <tbody>
-            {sites.map((site) => (
-              <Fragment key={`site-${site.id_site}`}>
-                {/* Site header */}
-                <tr>
-                  <td className={cn(
-                    "sticky left-0 z-10 border-b border-r border-slate-200 px-4 py-1.5",
-                    COL1,
-                    "bg-slate-100"
-                  )}>
-                    <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-                      {site.name}
-                    </span>
-                  </td>
-                  {days.map((dateStr, dayIdx) => {
-                    const isWkStart = weekStartSet.has(dateStr);
+            {(() => {
+              let globalRowIdx = 0;
+              return sites.map((site) => (
+                <Fragment key={`site-${site.id_site}`}>
+                  {site.departments.map((dept) => {
+                    const isEvenRow = globalRowIdx % 2 === 0;
+                    globalRowIdx++;
+                    const stickyBg = isEvenRow ? "bg-white" : "bg-slate-50";
+
                     return (
-                      <td
-                        key={dateStr}
-                        className="border-b border-slate-200 bg-slate-100"
-                        style={weekSepStyle(isWkStart, dayIdx === 0)}
-                      />
-                    );
-                  })}
-                </tr>
+                      <tr
+                        key={`dept-${dept.id_department}`}
+                        className={cn("border-b border-slate-200", stickyBg)}
+                      >
+                        <td className={cn(
+                          "sticky left-0 z-10 px-3 py-1.5",
+                          COL1,
+                          stickyBg
+                        )} style={{ boxShadow: COL1_SHADOW }}>
+                          <div className="text-[10px] font-medium text-slate-400 uppercase tracking-wide leading-tight">
+                            {site.name}
+                          </div>
+                          <div className="text-[13px] font-semibold text-slate-700 whitespace-nowrap leading-tight">
+                            {dept.name}
+                          </div>
+                        </td>
 
-                {/* Department rows */}
-                {site.departments.map((dept, deptIndex) => {
-                  const isEvenRow = deptIndex % 2 === 0;
-                  const stickyBg = isEvenRow ? "bg-white" : "bg-slate-50";
+                        {dept.days.map((day, dayIdx) => {
+                          const date = parseISO(day.date);
+                          const isWkStart = weekStartSet.has(day.date);
+                          const today = isToday(date);
 
-                  return (
-                    <tr
-                      key={`dept-${dept.id_department}`}
-                      className={cn("border-b border-slate-200", stickyBg)}
-                    >
-                      <td className={cn(
-                        "sticky left-0 z-10 border-r border-slate-200 px-4 py-2",
-                        COL1,
-                        stickyBg
-                      )}>
-                        <span className="text-[13px] font-medium text-slate-700 whitespace-nowrap">
-                          {dept.name}
-                        </span>
-                      </td>
+                          const merged = mergeAssignments(day.am.blocks, day.pm.blocks);
+                          const needs = [...day.am.needs, ...day.pm.needs];
+                          const allBlocks = [...day.am.blocks, ...day.pm.blocks];
 
-                      {dept.days.map((day, dayIdx) => {
-                        const date = parseISO(day.date);
-                        const isWkStart = weekStartSet.has(day.date);
-                        const today = isToday(date);
-
-                        const merged = mergeAssignments(day.am.blocks, day.pm.blocks);
-                        const needs = [...day.am.needs, ...day.pm.needs];
-                        const allBlocks = [...day.am.blocks, ...day.pm.blocks];
-
-                        return (
-                          <td
-                            key={day.date}
-                            className={cn(
-                              "px-1.5 py-1.5 align-top border-b border-r border-slate-200",
-                              today && "bg-sky-50"
-                            )}
-                            style={weekSepStyle(isWkStart, dayIdx === 0)}
-                          >
-                            <DroppableCell
-                              deptId={dept.id_department}
-                              deptName={dept.name}
-                              date={day.date}
-                              blocks={allBlocks}
+                          return (
+                            <td
+                              key={day.date}
+                              className={cn(
+                                "px-1.5 py-1.5 align-top border-b border-r border-slate-200",
+                                today && "bg-sky-50"
+                              )}
+                              style={weekSepStyle(isWkStart, dayIdx === 0)}
                             >
-                              <DayCard
-                                people={merged}
-                                needs={needs}
-                                initialsMap={initialsMap}
-                                date={day.date}
+                              <DroppableCell
                                 deptId={dept.id_department}
                                 deptName={dept.name}
-                                onChipClick={(person, anchor) =>
-                                  setChipMenu({ person, date: day.date, anchor })
-                                }
-                              />
-                            </DroppableCell>
-                          </td>
-                        );
-                      })}
-                    </tr>
+                                date={day.date}
+                                blocks={allBlocks}
+                              >
+                                <DayCard
+                                  people={merged}
+                                  needs={needs}
+                                  initialsMap={initialsMap}
+                                  date={day.date}
+                                  deptId={dept.id_department}
+                                  deptName={dept.name}
+                                  onChipClick={(person, anchor) =>
+                                    setChipMenu({ person, date: day.date, deptId: dept.id_department, deptName: dept.name, anchor })
+                                  }
+                                />
+                              </DroppableCell>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    );
+                  })}
+                </Fragment>
+              ));
+            })()}
+
+            {/* Absences row */}
+            {hasLeaves && (
+              <tr className="border-b border-slate-200">
+                <td className={cn(
+                  "sticky left-0 z-10 px-3 py-1.5 bg-white",
+                  COL1
+                )} style={{ boxShadow: COL1_SHADOW }}>
+                  <div className="text-[10px] font-medium text-red-400 uppercase tracking-wide leading-tight">
+                    Absences
+                  </div>
+                  <div className="text-[13px] font-semibold text-slate-700 whitespace-nowrap leading-tight">
+                    Personnel absent
+                  </div>
+                </td>
+                {days.map((dateStr, dayIdx) => {
+                  const date = parseISO(dateStr);
+                  const isWkStart = weekStartSet.has(dateStr);
+                  const today = isToday(date);
+                  const dayLeaves = leavesByDay.get(dateStr) ?? [];
+
+                  return (
+                    <td
+                      key={dateStr}
+                      className={cn(
+                        "px-1.5 py-1.5 align-top border-b border-r border-slate-200",
+                        today && "bg-sky-50"
+                      )}
+                      style={weekSepStyle(isWkStart, dayIdx === 0)}
+                    >
+                      <AbsenceCard leaves={dayLeaves} initialsMap={initialsMap} />
+                    </td>
                   );
                 })}
-              </Fragment>
-            ))}
-
-            {/* Absences section */}
-            {hasLeaves && (
-              <>
-                <tr>
-                  <td className={cn(
-                    "sticky left-0 z-10 border-b border-r border-slate-200 px-4 py-1.5",
-                    COL1,
-                    "bg-red-50"
-                  )}>
-                    <span className="text-[11px] font-semibold text-red-500 uppercase tracking-wider">
-                      Absences
-                    </span>
-                  </td>
-                  {days.map((dateStr, dayIdx) => {
-                    const isWkStart = weekStartSet.has(dateStr);
-                    return (
-                      <td
-                        key={dateStr}
-                        className="border-b border-slate-200 bg-red-50"
-                        style={weekSepStyle(isWkStart, dayIdx === 0)}
-                      />
-                    );
-                  })}
-                </tr>
-                <tr className="border-b border-slate-200">
-                  <td className={cn(
-                    "sticky left-0 z-10 border-r border-slate-200 px-4 py-2 bg-white",
-                    COL1
-                  )}>
-                    <span className="text-[13px] font-medium text-slate-500 italic whitespace-nowrap">
-                      Personnel absent
-                    </span>
-                  </td>
-                  {days.map((dateStr, dayIdx) => {
-                    const date = parseISO(dateStr);
-                    const isWkStart = weekStartSet.has(dateStr);
-                    const today = isToday(date);
-    
-                    const dayLeaves = leavesByDay.get(dateStr) ?? [];
-
-                    return (
-                      <td
-                        key={dateStr}
-                        className={cn(
-                          "px-1.5 py-1.5 align-top border-b border-r border-slate-200",
-                          today && "bg-sky-50"
-                        )}
-                        style={weekSepStyle(isWkStart, dayIdx === 0)}
-                      >
-                        <AbsenceCard leaves={dayLeaves} initialsMap={initialsMap} />
-                      </td>
-                    );
-                  })}
-                </tr>
-              </>
+              </tr>
             )}
           </tbody>
         </table>
@@ -741,6 +736,38 @@ export function DepartmentsTableView({ days, sites, leaves = [] }: DepartmentsTa
           </div>
         )}
       </Popover>
+
+      {/* Action dialogs */}
+      {quickAbsence && (
+        <QuickAbsenceDialog
+          open
+          onClose={() => setQuickAbsence(null)}
+          staffId={quickAbsence.staffId}
+          staffName={quickAbsence.staffName}
+          date={quickAbsence.date}
+          defaultPeriod={quickAbsence.period}
+        />
+      )}
+      {moveDialog && (
+        <MoveAssignmentDialog
+          open
+          onClose={() => setMoveDialog(null)}
+          person={moveDialog.person}
+          sourceDate={moveDialog.date}
+          sourceDeptName={moveDialog.deptName}
+          sites={sites}
+        />
+      )}
+      {swapDialog && (
+        <SwapAssignmentDialog
+          open
+          onClose={() => setSwapDialog(null)}
+          personA={swapDialog.person}
+          dateA={swapDialog.date}
+          deptNameA={swapDialog.deptName}
+          sites={sites}
+        />
+      )}
     </DndContext>
   );
 }
@@ -846,23 +873,27 @@ function PersonChip({
       {...attributes}
       onClick={handleClick}
       className={cn(
-        "relative inline-flex items-center justify-center gap-0.5 w-[38px] h-7 rounded-lg",
+        "relative inline-flex items-center justify-center gap-0.5 w-[38px] h-7 rounded-lg overflow-hidden",
         "text-[11px] font-semibold leading-none",
-        isDoc ? "chip-doctor" : "chip-secretary",
         "transition-all duration-200",
         "cursor-grab active:cursor-grabbing",
-        "focus:outline-none focus:ring-2 focus:ring-primary/20",
+        "focus:ring-2 focus:ring-primary/20",
         isDragging && "opacity-30 scale-95"
       )}
+      style={{
+        background: isDoc ? "#4A6FA5" : "#F8F9FA",
+        outline: isDoc ? "1px solid rgba(0,0,0,0.1)" : "1px solid #D1D5DB",
+        outlineOffset: "-1px",
+      }}
       title={`${person.firstname} ${person.lastname} — ${
         person.period === "FULL" ? "Journée" : person.period === "AM" ? "Matin" : "Après-midi"
       }`}
     >
-      {isAM && <span className="absolute left-0 top-1 bottom-1 w-[2.5px] rounded-r-full bg-blue-400/60" />}
-      {isPM && <span className="absolute right-0 top-1 bottom-1 w-[2.5px] rounded-l-full bg-amber-400/60" />}
-      <span className="text-slate-700">{initials}</span>
+      {isAM && <span className="absolute left-0 inset-y-0 w-[3px]" style={{ background: "#eab308" }} />}
+      {isPM && <span className="absolute right-0 inset-y-0 w-[3px]" style={{ background: "#d97706" }} />}
+      <span style={{ color: isDoc ? "#ffffff" : "#2C3E50" }}>{initials}</span>
       {tag && (
-        <span className="text-[9px] font-bold text-slate-400">{tag}</span>
+        <span className="text-[9px] font-bold" style={{ color: isDoc ? "rgba(255,255,255,0.5)" : "rgba(44,62,80,0.4)" }}>{tag}</span>
       )}
     </button>
   );
@@ -879,15 +910,20 @@ function OverlayChip({ person, initialsMap }: { person: DayPerson; initialsMap: 
   return (
     <span
       className={cn(
-        "relative inline-flex items-center justify-center gap-0.5 w-[38px] h-7 rounded-lg",
-        "text-[11px] font-semibold leading-none",
-        "chip-overlay cursor-grabbing",
+        "relative inline-flex items-center justify-center gap-0.5 w-[38px] h-7 rounded-lg overflow-hidden",
+        "text-[11px] font-semibold leading-none cursor-grabbing",
       )}
+      style={{
+        background: "#f8f9fa",
+        outline: "1px solid rgba(0,0,0,0.06)",
+        outlineOffset: "-1px",
+        boxShadow: "0 8px 24px -4px rgb(0 0 0 / 0.12), 0 2px 6px 0 rgb(0 0 0 / 0.06)",
+      }}
     >
-      {isAM && <span className="absolute left-0 top-1 bottom-1 w-[2.5px] rounded-r-full bg-blue-400/60" />}
-      {isPM && <span className="absolute right-0 top-1 bottom-1 w-[2.5px] rounded-l-full bg-amber-400/60" />}
-      <span className="text-slate-700">{initials}</span>
-      {tag && <span className="text-[9px] font-bold text-slate-400">{tag}</span>}
+      {isAM && <span className="absolute left-0 inset-y-0 w-[3px]" style={{ background: "#eab308" }} />}
+      {isPM && <span className="absolute right-0 inset-y-0 w-[3px]" style={{ background: "#d97706" }} />}
+      <span style={{ color: "#2C3E50" }}>{initials}</span>
+      {tag && <span className="text-[9px] font-bold" style={{ color: "rgba(44,62,80,0.4)" }}>{tag}</span>}
     </span>
   );
 }
@@ -902,17 +938,22 @@ function AbsenceChip({ leave, initialsMap }: { leave: { id_staff: number; firstn
   return (
     <span
       className={cn(
-        "relative inline-flex items-center justify-center w-[38px] h-7 rounded-lg",
-        "text-[11px] font-semibold leading-none text-rose-400",
-        "chip-absence",
+        "relative inline-flex items-center justify-center w-[38px] h-7 rounded-lg overflow-hidden",
+        "text-[11px] font-semibold leading-none",
         "transition-all duration-200 cursor-default",
       )}
+      style={{
+        background: "#f9f0f1",
+        outline: "1px solid rgba(180,130,135,0.2)",
+        outlineOffset: "-1px",
+        color: "#a8a29e",
+      }}
       title={`${leave.firstname} ${leave.lastname} — Absent${
         leave.period === null ? " (Journée)" : leave.period === "AM" ? " (Matin)" : " (Après-midi)"
       }`}
     >
-      {isAM && <span className="absolute left-0 top-1 bottom-1 w-[2.5px] rounded-r-full bg-blue-400/60" />}
-      {isPM && <span className="absolute right-0 top-1 bottom-1 w-[2.5px] rounded-l-full bg-amber-400/60" />}
+      {isAM && <span className="absolute left-0 inset-y-0 w-[3px]" style={{ background: "#eab308" }} />}
+      {isPM && <span className="absolute right-0 inset-y-0 w-[3px]" style={{ background: "#d97706" }} />}
       {initials}
     </span>
   );

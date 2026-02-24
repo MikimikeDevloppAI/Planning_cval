@@ -37,54 +37,68 @@ export function StaffCard({ staff }: StaffCardProps) {
 
   return (
     <>
-      {/* Back button — above the card */}
+      {/* Back button */}
       <Link
         href="/staff"
-        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground bg-muted/50 hover:bg-muted rounded-lg px-3 py-1.5 transition-all mb-4"
+        className="group inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground bg-muted/50 hover:bg-muted rounded-lg px-3 py-1.5 transition-all mb-4"
       >
-        <ArrowLeft className="w-4 h-4" />
+        <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
         Personnel
       </Link>
 
-      {/* Profile card */}
-      <div className="bg-card rounded-xl shadow-soft border border-border/50 overflow-hidden mb-6">
-        {/* Top gradient accent bar */}
-        <div className={cn("h-1 bg-gradient-to-r", colors.gradient)} />
+      {/* Profile card — Premium design */}
+      <div className="bg-card rounded-2xl shadow-soft border border-border/40 overflow-hidden mb-6">
+        {/* Gradient header band */}
+        <div
+          className="h-24 relative"
+          style={{
+            background: `linear-gradient(135deg, ${colors.hex}20, ${colors.hex}08)`,
+          }}
+        >
+          {/* Decorative circles */}
+          <div
+            className="absolute -top-12 -right-12 w-40 h-40 rounded-full"
+            style={{ backgroundColor: colors.hex, opacity: 0.06 }}
+          />
+          <div
+            className="absolute -bottom-8 -left-8 w-24 h-24 rounded-full"
+            style={{ backgroundColor: colors.hex, opacity: 0.04 }}
+          />
+        </div>
 
-        <div className="p-6">
-          <div className="flex items-center gap-5">
-            {/* Large avatar — rounded square */}
+        <div className="px-6 pb-6 -mt-10 relative">
+          <div className="flex items-end gap-5">
+            {/* Large avatar — overlapping the gradient band */}
             <div
               className={cn(
                 "w-20 h-20 rounded-2xl flex items-center justify-center text-2xl font-bold shrink-0",
-                "ring-4 ring-offset-2 ring-offset-card",
-                colors.avatar,
-                colors.ring
+                "ring-4 ring-card shadow-lg",
+                colors.avatar
               )}
             >
               {getInitials(staff.firstname, staff.lastname)}
             </div>
 
-            <div className="flex-1 min-w-0">
+            <div className="flex-1 min-w-0 pb-1">
               {/* Editable name */}
               {editing ? (
                 <div className="flex items-center gap-2">
                   <input
                     value={firstname}
                     onChange={(e) => setFirstname(e.target.value)}
-                    className="text-lg font-semibold text-foreground border border-border/50 rounded-lg px-2 py-1 w-40 bg-card focus:ring-2 focus:ring-ring outline-none"
+                    className="text-lg font-semibold text-foreground border border-border/50 rounded-xl px-3 py-1.5 w-40 bg-card focus:ring-2 focus:ring-primary/30 outline-none"
                     placeholder="Prénom"
                   />
                   <input
                     value={lastname}
                     onChange={(e) => setLastname(e.target.value)}
-                    className="text-lg font-semibold text-foreground border border-border/50 rounded-lg px-2 py-1 w-40 bg-card focus:ring-2 focus:ring-ring outline-none"
+                    className="text-lg font-semibold text-foreground border border-border/50 rounded-xl px-3 py-1.5 w-40 bg-card focus:ring-2 focus:ring-primary/30 outline-none"
                     placeholder="Nom"
                   />
                   <button
                     onClick={handleSave}
                     disabled={updateStaff.isPending}
-                    className="p-1.5 text-success hover:bg-success/10 rounded-lg transition-colors"
+                    className="p-2 text-success hover:bg-success/10 rounded-xl transition-colors"
                   >
                     <Check className="w-4 h-4" />
                   </button>
@@ -94,7 +108,7 @@ export function StaffCard({ staff }: StaffCardProps) {
                       setLastname(staff.lastname);
                       setEditing(false);
                     }}
-                    className="p-1.5 text-muted-foreground hover:bg-muted rounded-lg transition-colors"
+                    className="p-2 text-muted-foreground hover:bg-muted rounded-xl transition-colors"
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -113,7 +127,7 @@ export function StaffCard({ staff }: StaffCardProps) {
               <div className="flex items-center gap-2 mt-2">
                 <span
                   className={cn(
-                    "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold",
+                    "inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-semibold",
                     colors.badge
                   )}
                 >
@@ -122,11 +136,12 @@ export function StaffCard({ staff }: StaffCardProps) {
                     "—"}
                 </span>
                 {staff.is_active ? (
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-success/10 text-success">
+                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs font-medium bg-success/8 text-success">
+                    <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse-dot" />
                     Actif
                   </span>
                 ) : (
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-muted text-muted-foreground">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-muted text-muted-foreground">
                     Inactif
                   </span>
                 )}

@@ -69,11 +69,8 @@ export function StaffLeaveManager({ staffId, leaves }: StaffLeaveManagerProps) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h4 className="text-sm font-semibold text-foreground">
-          Congés & Absences ({leaves.length})
-        </h4>
-        {!showForm && (
+      {!showForm && (
+        <div className="flex items-center justify-end">
           <button
             onClick={() => setShowForm(true)}
             className="flex items-center gap-1 text-sm text-primary hover:text-primary-hover"
@@ -81,8 +78,8 @@ export function StaffLeaveManager({ staffId, leaves }: StaffLeaveManagerProps) {
             <Plus className="w-4 h-4" />
             Déclarer
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Add form */}
       {showForm && (
@@ -148,7 +145,9 @@ export function StaffLeaveManager({ staffId, leaves }: StaffLeaveManagerProps) {
 
       {leaves.length === 0 && !showForm && (
         <div className="text-center py-8 text-muted-foreground">
-          <CalendarOff className="w-8 h-8 mx-auto mb-2" />
+          <div className="w-14 h-14 rounded-2xl bg-muted/30 flex items-center justify-center mx-auto mb-3">
+            <CalendarOff className="w-7 h-7" />
+          </div>
           <p className="text-sm">Aucune absence déclarée</p>
         </div>
       )}
@@ -199,7 +198,7 @@ export function StaffLeaveManager({ staffId, leaves }: StaffLeaveManagerProps) {
             {pastLeaves.slice(0, 10).map((leave) => (
               <div
                 key={leave.id_leave}
-                className="flex items-center justify-between text-sm text-muted-foreground px-4 py-1.5"
+                className="flex items-center justify-between text-sm text-muted-foreground px-4 py-1.5 rounded-lg hover:bg-muted/30 transition-colors"
               >
                 <span>
                   {formatDate(leave.start_date)}

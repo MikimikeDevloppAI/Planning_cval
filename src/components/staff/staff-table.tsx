@@ -68,41 +68,48 @@ export function StaffTable() {
             placeholder="Rechercher par nom..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 text-sm rounded-xl border border-border/50 bg-card focus:ring-2 focus:ring-ring focus:border-ring outline-none transition-all"
+            className="w-full pl-9 pr-3 py-2 text-sm rounded-xl border border-border/50 bg-card focus:ring-2 focus:ring-ring focus:border-ring outline-none"
           />
         </div>
 
-        {/* Position pill tabs */}
-        <div className="flex items-center gap-1 bg-muted/50 rounded-xl p-1">
+        {/* Position pill tabs with colored dots */}
+        <div className="flex items-center gap-1 bg-muted/50 rounded-xl p-1 border border-border/30">
           <button
             onClick={() => setPosFilter("")}
             className={cn(
               "px-3 py-1.5 text-xs font-medium rounded-lg transition-all",
               posFilter === ""
-                ? "bg-card text-foreground shadow-sm"
+                ? "bg-card text-foreground shadow-sm ring-1 ring-border/50"
                 : "text-muted-foreground hover:text-foreground"
             )}
           >
             Tous
           </button>
-          {([1, 2, 3] as const).map((id) => (
-            <button
-              key={id}
-              onClick={() => setPosFilter(posFilter === id ? "" : id)}
-              className={cn(
-                "px-3 py-1.5 text-xs font-medium rounded-lg transition-all",
-                posFilter === id
-                  ? "bg-card text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              {POSITION_LABELS[id]}s
-            </button>
-          ))}
+          {([1, 2, 3] as const).map((id) => {
+            const posColors = getPositionColors(id);
+            return (
+              <button
+                key={id}
+                onClick={() => setPosFilter(posFilter === id ? "" : id)}
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-all",
+                  posFilter === id
+                    ? "bg-card text-foreground shadow-sm ring-1 ring-border/50"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <span
+                  className="w-2 h-2 rounded-full shrink-0"
+                  style={{ backgroundColor: posColors.hex }}
+                />
+                {POSITION_LABELS[id]}s
+              </button>
+            );
+          })}
         </div>
 
         {/* Active pill tabs */}
-        <div className="flex items-center gap-1 bg-muted/50 rounded-xl p-1">
+        <div className="flex items-center gap-1 bg-muted/50 rounded-xl p-1 border border-border/30">
           {([
             { value: "true", label: "Actifs" },
             { value: "false", label: "Inactifs" },
@@ -114,7 +121,7 @@ export function StaffTable() {
               className={cn(
                 "px-3 py-1.5 text-xs font-medium rounded-lg transition-all",
                 activeFilter === opt.value
-                  ? "bg-card text-foreground shadow-sm"
+                  ? "bg-card text-foreground shadow-sm ring-1 ring-border/50"
                   : "text-muted-foreground hover:text-foreground"
               )}
             >
@@ -164,15 +171,18 @@ export function StaffTable() {
                     {/* Section header */}
                     <div className="flex items-center gap-3 mb-4">
                       <div
-                        className={cn(
-                          "w-1 h-8 rounded-full bg-gradient-to-b",
-                          colors.gradient
-                        )}
+                        className="w-1.5 h-8 rounded-full"
+                        style={{ background: `linear-gradient(to bottom, ${colors.hex}, ${colors.hex}cc)` }}
                       />
                       <h3 className="text-sm font-semibold text-foreground">
                         {POSITION_LABELS[posId]}s
                       </h3>
-                      <span className="text-xs text-muted-foreground bg-muted rounded-full px-2 py-0.5">
+                      <span
+                        className={cn(
+                          "text-xs font-medium rounded-full px-2.5 py-0.5",
+                          colors.badge
+                        )}
+                      >
                         {members.length}
                       </span>
                     </div>
@@ -228,80 +238,87 @@ function StaffListCard({
     <div
       onClick={onClick}
       className={cn(
-        "group relative bg-card rounded-xl border border-border/50 p-5",
+        "group relative bg-card rounded-2xl border border-border/40 overflow-hidden",
         "shadow-[0_1px_3px_rgba(0,0,0,0.04)]",
-        "hover:shadow-[0_8px_25px_rgba(0,0,0,0.08)]",
+        "hover:shadow-[0_12px_32px_rgba(0,0,0,0.08)]",
         "cursor-pointer transition-all duration-300 ease-out",
-        "hover:-translate-y-1 hover:border-border"
+        "hover:-translate-y-1.5 hover:border-border/80",
+        "animate-fade-in-up"
       )}
     >
-      {/* Top accent line — appears on hover */}
+      {/* Top gradient bar — always visible */}
       <div
-        className={cn(
-          "absolute top-0 left-4 right-4 h-0.5 rounded-b-full bg-gradient-to-r opacity-0 group-hover:opacity-100 transition-opacity duration-300",
-          colors.gradient
-        )}
+        className="h-1 w-full"
+        style={{ background: `linear-gradient(to right, ${colors.hex}, ${colors.hex}cc)` }}
       />
 
-      {/* Avatar + Name */}
-      <div className="flex items-start gap-3.5">
-        <div
-          className={cn(
-            "w-12 h-12 rounded-full flex items-center justify-center text-sm font-bold shrink-0",
-            "transition-shadow duration-300",
-            colors.avatar
-          )}
-        >
-          {initials}
+      <div className="p-5">
+        {/* Avatar + Name */}
+        <div className="flex items-start gap-4">
+          <div
+            className={cn(
+              "w-12 h-12 rounded-xl flex items-center justify-center text-sm font-bold shrink-0",
+              "shadow-sm transition-all duration-300",
+              "group-hover:shadow-md group-hover:scale-105",
+              colors.avatar
+            )}
+          >
+            {initials}
+          </div>
+
+          <div className="flex-1 min-w-0">
+            <h4 className="text-sm font-semibold text-foreground truncate group-hover:text-primary transition-colors">
+              {staff.lastname as string} {staff.firstname as string}
+            </h4>
+
+            <div className="flex items-center gap-2 mt-1.5">
+              <span
+                className={cn(
+                  "inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold",
+                  colors.badge
+                )}
+              >
+                {positionName}
+              </span>
+
+              {isActive ? (
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium text-success bg-success/8">
+                  <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse-dot" />
+                  Actif
+                </span>
+              ) : (
+                <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-muted text-muted-foreground">
+                  Inactif
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Hover chevron */}
+          <ChevronRight className="w-4 h-4 text-border group-hover:text-primary group-hover:translate-x-0.5 transition-all shrink-0 mt-1" />
         </div>
 
-        <div className="flex-1 min-w-0">
-          <h4 className="text-sm font-semibold text-foreground truncate">
-            {staff.lastname as string} {staff.firstname as string}
-          </h4>
-
-          <div className="flex items-center gap-2 mt-1.5">
-            <span
-              className={cn(
-                "inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold",
-                colors.badge
-              )}
-            >
-              {positionName}
-            </span>
-
-            {!isActive && (
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-muted text-muted-foreground">
-                Inactif
+        {/* Secretary settings badges */}
+        {posId === 2 && settings && (
+          <div className="flex flex-wrap items-center gap-1.5 mt-3.5 pt-3 border-t border-border/20">
+            {settings.is_flexible && (
+              <span className="px-2 py-0.5 rounded-md text-[10px] font-medium bg-[#FFF8E7] text-[#B8860B] border border-[#F0DBA0]/50">
+                Flexible
+              </span>
+            )}
+            {settings.full_day_only && (
+              <span className="px-2 py-0.5 rounded-md text-[10px] font-medium bg-[#EEF3F9] text-[#4A6FA5] border border-[#B8CCE4]/50">
+                JC uniquement
+              </span>
+            )}
+            {(settings.admin_target ?? 0) > 0 && (
+              <span className="px-2 py-0.5 rounded-md text-[10px] font-medium bg-[#F5F0F7] text-[#6B4C7A] border border-[#D4C2DD]/50">
+                Admin: {settings.admin_target}/sem
               </span>
             )}
           </div>
-        </div>
-
-        {/* Hover chevron */}
-        <ChevronRight className="w-4 h-4 text-border group-hover:text-muted-foreground transition-colors shrink-0 mt-1" />
+        )}
       </div>
-
-      {/* Secretary settings badges */}
-      {posId === 2 && settings && (
-        <div className="flex flex-wrap items-center gap-1.5 mt-3 pt-3 border-t border-border/30">
-          {settings.is_flexible && (
-            <span className="px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 text-[10px] font-medium">
-              Flexible
-            </span>
-          )}
-          {settings.full_day_only && (
-            <span className="px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 text-[10px] font-medium">
-              JC uniquement
-            </span>
-          )}
-          {(settings.admin_target ?? 0) > 0 && (
-            <span className="px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 text-[10px] font-medium">
-              Admin: {settings.admin_target}/sem
-            </span>
-          )}
-        </div>
-      )}
     </div>
   );
 }

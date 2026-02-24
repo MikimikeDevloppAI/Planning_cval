@@ -261,9 +261,12 @@ export default function PlanningPage() {
           </div>
         </div>
 
-        {/* Filter bar */}
-        {data && (
-          <div className="flex items-center gap-3 mt-3 pt-3 border-t border-border/20">
+      </div>
+
+      {/* Filter bar — separated from header */}
+      {data && (
+        <div className="shrink-0 mx-4 mt-3 bg-card rounded-xl border border-border/40 shadow-[0_1px_3px_rgba(0,0,0,0.06)] px-4 py-2.5">
+          <div className="flex items-center gap-3">
             <Filter className="w-4 h-4 text-muted-foreground shrink-0" />
 
             {/* Site filter */}
@@ -304,9 +307,33 @@ export default function PlanningPage() {
                 Réinitialiser
               </button>
             )}
+
+            {/* Spacer */}
+            <div className="flex-1" />
+
+            {/* Legend */}
+            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+              <div className="flex items-center gap-1.5">
+                <span className="w-5 h-5 rounded" style={{ background: "#4A6FA5" }} />
+                <span>Médecin</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="w-5 h-5 rounded" style={{ background: "#F8F9FA", border: "1px solid #D1D5DB" }} />
+                <span>Secrétaire</span>
+              </div>
+              <div className="w-px h-4 bg-border/50" />
+              <div className="flex items-center gap-1.5">
+                <span className="w-[3px] h-4 rounded-full" style={{ background: "#eab308" }} />
+                <span>Matin</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="w-[3px] h-4 rounded-full" style={{ background: "#d97706" }} />
+                <span>Après-midi</span>
+              </div>
+            </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Content */}
       <div className="flex-1 min-h-0 p-4">

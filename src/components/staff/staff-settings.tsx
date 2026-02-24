@@ -53,10 +53,6 @@ export function StaffSettings({ staffId, settings }: StaffSettingsProps) {
 
   return (
     <div className="space-y-5">
-      <h4 className="text-sm font-semibold text-foreground">
-        Paramètres Secrétaire
-      </h4>
-
       {/* Flexible toggle */}
       <div className="flex items-center justify-between">
         <div>

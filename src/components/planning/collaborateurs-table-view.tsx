@@ -435,19 +435,11 @@ export function CollaborateursTableView({
 
 type BadgeVariant = "doctor" | "secretary" | "admin" | "absence";
 
-const VARIANT_STYLES: Record<BadgeVariant, { base: string }> = {
-  doctor: {
-    base: "chip-doctor text-slate-700",
-  },
-  secretary: {
-    base: "chip-secretary text-slate-700",
-  },
-  admin: {
-    base: "chip-secretary text-slate-700",
-  },
-  absence: {
-    base: "chip-absence text-rose-400",
-  },
+const VARIANT_INLINE: Record<BadgeVariant, { bg: string; border: string; color: string }> = {
+  doctor:    { bg: "#4A6FA5", border: "1px solid rgba(0,0,0,0.1)", color: "#ffffff" },
+  secretary: { bg: "#F8F9FA", border: "1px solid #D1D5DB",         color: "#2C3E50" },
+  admin:     { bg: "#F8F9FA", border: "1px solid #D1D5DB",         color: "#2C3E50" },
+  absence:   { bg: "#f9f0f1", border: "1px solid rgba(180,130,135,0.2)", color: "#a8a29e" },
 };
 
 function Badge({
@@ -468,7 +460,7 @@ function Badge({
   const isAM = period === "AM";
   const isPM = period === "PM";
   const isFullDay = period === "FULL_DAY";
-  const styles = VARIANT_STYLES[variant];
+  const vi = VARIANT_INLINE[variant];
 
   return (
     <div className="relative group/badge">
@@ -477,17 +469,17 @@ function Badge({
           "relative flex items-center gap-1 h-6 rounded-lg overflow-hidden",
           "text-[10px] font-semibold leading-none",
           "transition-all duration-200",
-          styles.base,
           isFullDay ? "w-full px-2" : "w-[110px]",
           isAM && "pl-2.5 pr-1.5",
           isPM && "pl-1.5 pr-2.5",
         )}
+        style={{ background: vi.bg, outline: vi.border, outlineOffset: "-1px", color: vi.color }}
       >
         {isAM && (
-          <span className="absolute left-0 top-1 bottom-1 w-[2.5px] rounded-r-full bg-blue-400/60" />
+          <span className="absolute left-0 inset-y-0 w-[3px]" style={{ background: "#eab308" }} />
         )}
         {isPM && (
-          <span className="absolute right-0 top-1 bottom-1 w-[2.5px] rounded-l-full bg-amber-400/60" />
+          <span className="absolute right-0 inset-y-0 w-[3px]" style={{ background: "#d97706" }} />
         )}
         <span className="font-bold shrink-0">{label}</span>
         <span className="opacity-60 truncate">{sub}</span>
