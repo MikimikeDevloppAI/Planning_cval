@@ -7,6 +7,8 @@ import { createClient } from "@/lib/supabase/client";
 import { fetchSites as fetchSitesQuery, fetchRoles as fetchRolesQuery } from "@/lib/supabase/queries";
 import { PREFERENCE_LABELS, TARGET_TYPE_LABELS, JOUR_LABELS } from "@/lib/constants";
 import { Plus, Trash2, Ban, AlertTriangle, Heart } from "lucide-react";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { CustomSelect } from "@/components/ui/custom-select";
 import type { PreferenceLevel, TargetType } from "@/lib/types/database";
 
 interface PrefEntry {
@@ -58,6 +60,7 @@ export function StaffPrefsManager({ staffId, preferences }: StaffPrefsManagerPro
   const roles = (rolesData ?? []) as RoleOption[];
 
   const [showForm, setShowForm] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState<PrefEntry | null>(null);
 
   // Form state
   const [targetType, setTargetType] = useState<TargetType>("SITE");
@@ -187,9 +190,7 @@ export function StaffPrefsManager({ staffId, preferences }: StaffPrefsManagerPro
               </div>
             </div>
             <button
-              onClick={() =>
-                removePref.mutate({ staffId, prefId: pref.id_preference })
-              }
+              onClick={() => setConfirmDelete(pref)}
               className="text-destructive/50 hover:text-destructive p-1 rounded-lg hover:bg-destructive/5 transition-colors"
             >
               <Trash2 className="w-4 h-4" />
@@ -197,6 +198,24 @@ export function StaffPrefsManager({ staffId, preferences }: StaffPrefsManagerPro
           </div>
         ))}
       </div>
+
+      <ConfirmDialog
+        open={!!confirmDelete}
+        variant="danger"
+        title="Supprimer cette préférence ?"
+        message={`La préférence « ${PREFERENCE_LABELS[confirmDelete?.preference ?? "INTERDIT"]} » sera supprimée.`}
+        confirmLabel="Supprimer"
+        onConfirm={() => {
+          if (confirmDelete) {
+            removePref.mutate(
+              { staffId, prefId: confirmDelete.id_preference },
+              { onSuccess: () => setConfirmDelete(null) }
+            );
+          }
+        }}
+        onCancel={() => setConfirmDelete(null)}
+        isPending={removePref.isPending}
+      />
 
       {/* Add form */}
       {showForm && (
@@ -206,29 +225,33 @@ export function StaffPrefsManager({ staffId, preferences }: StaffPrefsManagerPro
               <label className="block text-xs font-medium text-muted-foreground mb-1">
                 Type de cible
               </label>
-              <select
+              <CustomSelect
                 value={targetType}
-                onChange={(e) => setTargetType(e.target.value as TargetType)}
-                className="w-full rounded-xl border border-border/50 bg-card px-3 py-2 text-sm focus:ring-2 focus:ring-ring outline-none"
-              >
-                <option value="SITE">Site</option>
-                <option value="DEPARTMENT">Département</option>
-                <option value="ROLE">Rôle</option>
-              </select>
+                onChange={(v) => setTargetType(v as TargetType)}
+                options={[
+                  { value: "SITE", label: "Site" },
+                  { value: "DEPARTMENT", label: "Département" },
+                  { value: "ROLE", label: "Rôle" },
+                ]}
+                placeholder="Type de cible"
+                className="w-full"
+              />
             </div>
             <div>
               <label className="block text-xs font-medium text-muted-foreground mb-1">
                 Niveau
               </label>
-              <select
+              <CustomSelect
                 value={prefLevel}
-                onChange={(e) => setPrefLevel(e.target.value as PreferenceLevel)}
-                className="w-full rounded-xl border border-border/50 bg-card px-3 py-2 text-sm focus:ring-2 focus:ring-ring outline-none"
-              >
-                <option value="INTERDIT">Interdit</option>
-                <option value="EVITER">Éviter</option>
-                <option value="PREFERE">Préféré</option>
-              </select>
+                onChange={(v) => setPrefLevel(v as PreferenceLevel)}
+                options={[
+                  { value: "INTERDIT", label: "Interdit" },
+                  { value: "EVITER", label: "Éviter" },
+                  { value: "PREFERE", label: "Préféré" },
+                ]}
+                placeholder="Niveau"
+                className="w-full"
+              />
             </div>
           </div>
 
@@ -237,20 +260,13 @@ export function StaffPrefsManager({ staffId, preferences }: StaffPrefsManagerPro
               <label className="block text-xs font-medium text-muted-foreground mb-1">
                 Site
               </label>
-              <select
-                value={selectedSite}
-                onChange={(e) =>
-                  setSelectedSite(e.target.value ? parseInt(e.target.value) : "")
-                }
-                className="w-full rounded-xl border border-border/50 bg-card px-3 py-2 text-sm focus:ring-2 focus:ring-ring outline-none"
-              >
-                <option value="">Choisir...</option>
-                {sites.map((s) => (
-                  <option key={s.id_site} value={s.id_site}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
+              <CustomSelect
+                value={selectedSite ? String(selectedSite) : ""}
+                onChange={(v) => setSelectedSite(v ? parseInt(v) : "")}
+                options={sites.map((s) => ({ value: String(s.id_site), label: s.name }))}
+                placeholder="Choisir..."
+                className="w-full"
+              />
             </div>
           )}
 
@@ -260,44 +276,28 @@ export function StaffPrefsManager({ staffId, preferences }: StaffPrefsManagerPro
                 <label className="block text-xs font-medium text-muted-foreground mb-1">
                   Site
                 </label>
-                <select
-                  value={selectedSite}
-                  onChange={(e) => {
-                    setSelectedSite(
-                      e.target.value ? parseInt(e.target.value) : ""
-                    );
+                <CustomSelect
+                  value={selectedSite ? String(selectedSite) : ""}
+                  onChange={(v) => {
+                    setSelectedSite(v ? parseInt(v) : "");
                     setSelectedDept("");
                   }}
-                  className="w-full rounded-xl border border-border/50 bg-card px-3 py-2 text-sm focus:ring-2 focus:ring-ring outline-none"
-                >
-                  <option value="">Choisir...</option>
-                  {sites.map((s) => (
-                    <option key={s.id_site} value={s.id_site}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
+                  options={sites.map((s) => ({ value: String(s.id_site), label: s.name }))}
+                  placeholder="Choisir..."
+                  className="w-full"
+                />
               </div>
               <div>
                 <label className="block text-xs font-medium text-muted-foreground mb-1">
                   Département
                 </label>
-                <select
-                  value={selectedDept}
-                  onChange={(e) =>
-                    setSelectedDept(
-                      e.target.value ? parseInt(e.target.value) : ""
-                    )
-                  }
-                  className="w-full rounded-xl border border-border/50 bg-card px-3 py-2 text-sm focus:ring-2 focus:ring-ring outline-none"
-                >
-                  <option value="">Choisir...</option>
-                  {selectedSiteDepts.map((d) => (
-                    <option key={d.id_department} value={d.id_department}>
-                      {d.name}
-                    </option>
-                  ))}
-                </select>
+                <CustomSelect
+                  value={selectedDept ? String(selectedDept) : ""}
+                  onChange={(v) => setSelectedDept(v ? parseInt(v) : "")}
+                  options={selectedSiteDepts.map((d) => ({ value: String(d.id_department), label: d.name }))}
+                  placeholder="Choisir..."
+                  className="w-full"
+                />
               </div>
             </div>
           )}
@@ -307,20 +307,13 @@ export function StaffPrefsManager({ staffId, preferences }: StaffPrefsManagerPro
               <label className="block text-xs font-medium text-muted-foreground mb-1">
                 Rôle
               </label>
-              <select
-                value={selectedRole}
-                onChange={(e) =>
-                  setSelectedRole(e.target.value ? parseInt(e.target.value) : "")
-                }
-                className="w-full rounded-xl border border-border/50 bg-card px-3 py-2 text-sm focus:ring-2 focus:ring-ring outline-none"
-              >
-                <option value="">Choisir...</option>
-                {roles.map((r) => (
-                  <option key={r.id_role} value={r.id_role}>
-                    {r.name}
-                  </option>
-                ))}
-              </select>
+              <CustomSelect
+                value={selectedRole ? String(selectedRole) : ""}
+                onChange={(v) => setSelectedRole(v ? parseInt(v) : "")}
+                options={roles.map((r) => ({ value: String(r.id_role), label: r.name }))}
+                placeholder="Choisir..."
+                className="w-full"
+              />
             </div>
           )}
 
@@ -329,18 +322,14 @@ export function StaffPrefsManager({ staffId, preferences }: StaffPrefsManagerPro
               <label className="block text-xs font-medium text-muted-foreground mb-1">
                 Jour (optionnel)
               </label>
-              <select
+              <CustomSelect
                 value={dayOfWeek}
-                onChange={(e) => setDayOfWeek(e.target.value)}
-                className="w-full rounded-xl border border-border/50 bg-card px-3 py-2 text-sm focus:ring-2 focus:ring-ring outline-none"
-              >
-                <option value="">Tous les jours</option>
-                {Object.entries(JOUR_LABELS).map(([id, label]) => (
-                  <option key={id} value={id}>
-                    {label}
-                  </option>
-                ))}
-              </select>
+                onChange={setDayOfWeek}
+                options={Object.entries(JOUR_LABELS).map(([id, label]) => ({ value: id, label: label as string }))}
+                placeholder="Tous les jours"
+                allowEmpty
+                className="w-full"
+              />
             </div>
             <div>
               <label className="block text-xs font-medium text-muted-foreground mb-1">
@@ -349,7 +338,7 @@ export function StaffPrefsManager({ staffId, preferences }: StaffPrefsManagerPro
               <input
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
-                className="w-full rounded-xl border border-border/50 bg-card px-3 py-2 text-sm focus:ring-2 focus:ring-ring outline-none"
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 hover:border-slate-300 hover:shadow-sm transition-all"
                 placeholder="Raison..."
               />
             </div>

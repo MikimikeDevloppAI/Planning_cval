@@ -20,7 +20,6 @@ export function StaffTable() {
   const [activeFilter, setActiveFilter] = useState<string>("true");
 
   const { data: staffList, isLoading, error } = useStaffList({
-    position: posFilter ? posFilter : undefined,
     active: activeFilter,
   });
   const router = useRouter();
@@ -28,6 +27,20 @@ export function StaffTable() {
   const filtered = useMemo(() => {
     if (!staffList) return [];
     let list = [...staffList];
+
+    // Position filter — 1 includes obstétriciennes (3)
+    if (posFilter) {
+      if (posFilter === 1) {
+        list = list.filter((s: Record<string, unknown>) => {
+          const pos = s.id_primary_position as number;
+          return pos === 1 || pos === 3;
+        });
+      } else {
+        list = list.filter(
+          (s: Record<string, unknown>) => s.id_primary_position === posFilter
+        );
+      }
+    }
 
     if (search) {
       const q = search.toLowerCase();
@@ -43,15 +56,16 @@ export function StaffTable() {
     );
 
     return list;
-  }, [staffList, search]);
+  }, [staffList, search, posFilter]);
 
-  // Group by position
+  // Group by position — merge obstétriciennes (3) with médecins (1)
   const grouped = useMemo(() => {
     const groups = new Map<number, typeof filtered>();
     for (const s of filtered) {
       const pos = s.id_primary_position as number;
-      if (!groups.has(pos)) groups.set(pos, []);
-      groups.get(pos)!.push(s);
+      const groupKey = pos === 3 ? 1 : pos; // obstétriciennes → médecins group
+      if (!groups.has(groupKey)) groups.set(groupKey, []);
+      groups.get(groupKey)!.push(s);
     }
     return Array.from(groups.entries()).sort((a, b) => a[0] - b[0]);
   }, [filtered]);
@@ -68,11 +82,11 @@ export function StaffTable() {
             placeholder="Rechercher par nom..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 text-sm rounded-xl border border-border/50 bg-card focus:ring-2 focus:ring-ring focus:border-ring outline-none"
+            className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-slate-200 bg-white text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 hover:border-slate-300 hover:shadow-sm transition-all"
           />
         </div>
 
-        {/* Position pill tabs with colored dots */}
+        {/* Position pill tabs — Médecins+Obstétriciennes merged */}
         <div className="flex items-center gap-1 bg-muted/50 rounded-xl p-1 border border-border/30">
           <button
             onClick={() => setPosFilter("")}
@@ -85,7 +99,10 @@ export function StaffTable() {
           >
             Tous
           </button>
-          {([1, 2, 3] as const).map((id) => {
+          {([
+            { id: 1, label: "Médecins" },
+            { id: 2, label: "Secrétaires" },
+          ] as const).map(({ id, label }) => {
             const posColors = getPositionColors(id);
             return (
               <button
@@ -102,7 +119,7 @@ export function StaffTable() {
                   className="w-2 h-2 rounded-full shrink-0"
                   style={{ backgroundColor: posColors.hex }}
                 />
-                {POSITION_LABELS[id]}s
+                {label}
               </button>
             );
           })}
@@ -175,7 +192,7 @@ export function StaffTable() {
                         style={{ background: `linear-gradient(to bottom, ${colors.hex}, ${colors.hex}cc)` }}
                       />
                       <h3 className="text-sm font-semibold text-foreground">
-                        {POSITION_LABELS[posId]}s
+                        {posId === 1 ? "Médecins & Obstétriciennes" : `${POSITION_LABELS[posId]}s`}
                       </h3>
                       <span
                         className={cn(
@@ -243,16 +260,17 @@ function StaffListCard({
         "hover:shadow-[0_12px_32px_rgba(0,0,0,0.08)]",
         "cursor-pointer transition-all duration-300 ease-out",
         "hover:-translate-y-1.5 hover:border-border/80",
-        "animate-fade-in-up"
+        "animate-fade-in-up",
+        "flex"
       )}
     >
-      {/* Top gradient bar — always visible */}
+      {/* Left gradient bar */}
       <div
-        className="h-1 w-full"
-        style={{ background: `linear-gradient(to right, ${colors.hex}, ${colors.hex}cc)` }}
+        className="w-1 shrink-0 self-stretch"
+        style={{ background: `linear-gradient(to bottom, ${colors.hex}, ${colors.hex}aa)` }}
       />
 
-      <div className="p-5">
+      <div className="p-5 flex-1 min-w-0">
         {/* Avatar + Name */}
         <div className="flex items-start gap-4">
           <div

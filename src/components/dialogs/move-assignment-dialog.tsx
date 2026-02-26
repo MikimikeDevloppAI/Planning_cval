@@ -7,6 +7,7 @@ import { X, Move, Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useMoveAssignment, useMoveDoctorSchedule } from "@/hooks/use-assignments";
 import { cn } from "@/lib/utils";
+import { CustomSelect } from "@/components/ui/custom-select";
 import type { PlanningSite } from "@/lib/types/database";
 
 interface DayPersonLike {
@@ -165,18 +166,13 @@ export function MoveAssignmentDialog({
             <label className="block text-sm font-medium text-foreground mb-1">
               Département cible
             </label>
-            <select
-              className="w-full rounded-lg border border-border/50 bg-card px-3 py-2 text-sm focus:ring-2 focus:ring-ring outline-none"
-              value={targetDeptId}
-              onChange={(e) => setTargetDeptId(e.target.value ? parseInt(e.target.value) : "")}
-            >
-              <option value="">Sélectionner...</option>
-              {deptOptions.map((opt) => (
-                <option key={opt.deptId} value={opt.deptId}>
-                  {opt.siteName} — {opt.deptName}
-                </option>
-              ))}
-            </select>
+            <CustomSelect
+              value={targetDeptId ? String(targetDeptId) : ""}
+              onChange={(v) => setTargetDeptId(v ? parseInt(v) : "")}
+              options={deptOptions.map((opt) => ({ value: String(opt.deptId), label: `${opt.siteName} — ${opt.deptName}` }))}
+              placeholder="Sélectionner..."
+              className="w-full"
+            />
           </div>
 
           {/* Target date */}
@@ -186,7 +182,7 @@ export function MoveAssignmentDialog({
             </label>
             <input
               type="date"
-              className="w-full rounded-lg border border-border/50 bg-card px-3 py-2 text-sm focus:ring-2 focus:ring-ring outline-none"
+              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 hover:border-slate-300 hover:shadow-sm transition-all"
               value={targetDate}
               onChange={(e) => setTargetDate(e.target.value)}
             />

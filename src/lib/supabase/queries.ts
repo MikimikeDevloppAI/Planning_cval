@@ -102,6 +102,16 @@ export async function deleteSkill(supabase: SupabaseClient, id: number) {
 }
 
 // ============================================================
+// CONFIG — Activity Templates (Bloc opératoire interventions)
+// ============================================================
+
+export async function fetchActivityTemplates(supabase: SupabaseClient) {
+  return throwIfError(
+    await supabase.from("activity_templates").select("id_activity, name").order("name")
+  );
+}
+
+// ============================================================
 // CONFIG — Roles
 // ============================================================
 
@@ -251,7 +261,7 @@ export async function fetchStaffDetail(supabase: SupabaseClient, id: number) {
         .order("start_date", { ascending: false }),
       supabase
         .from("staff_schedules")
-        .select("*, departments ( name ), recurrence_types ( name, cycle_weeks )")
+        .select("*, departments ( name, sites ( name ) ), recurrence_types ( name, cycle_weeks ), activity_templates ( name )")
         .eq("id_staff", id)
         .eq("is_active", true)
         .order("day_of_week"),
@@ -443,6 +453,92 @@ export async function deleteStaffLeave(supabase: SupabaseClient, leaveId: number
   });
 
   return leave;
+}
+
+export async function updateStaffLeave(
+  supabase: SupabaseClient,
+  leaveId: number,
+  data: { start_date: string; end_date: string; period: string | null }
+) {
+  return throwIfError(
+    await supabase
+      .from("staff_leaves")
+      .update(data)
+      .eq("id_leave", leaveId)
+      .select("*")
+      .single()
+  );
+}
+
+// ============================================================
+// STAFF — Schedules CRUD
+// ============================================================
+
+export async function fetchRecurrenceTypes(supabase: SupabaseClient) {
+  return throwIfError(
+    await supabase
+      .from("recurrence_types")
+      .select("id_recurrence, name, cycle_weeks")
+      .order("cycle_weeks")
+  );
+}
+
+export async function addStaffSchedule(
+  supabase: SupabaseClient,
+  staffId: number,
+  data: {
+    schedule_type: string;
+    day_of_week: number;
+    period: string;
+    id_department: number;
+    id_recurrence?: number | null;
+    week_offset?: number | null;
+    start_date?: string | null;
+    end_date?: string | null;
+    id_activity?: number | null;
+  }
+) {
+  return throwIfError(
+    await supabase
+      .from("staff_schedules")
+      .insert({ id_staff: staffId, is_active: true, ...data })
+      .select("*, departments ( name, sites ( name ) ), recurrence_types ( name, cycle_weeks ), activity_templates ( name )")
+      .single()
+  );
+}
+
+export async function updateStaffSchedule(
+  supabase: SupabaseClient,
+  scheduleId: number,
+  data: Partial<{
+    schedule_type: string;
+    day_of_week: number;
+    period: string;
+    id_department: number;
+    id_recurrence: number | null;
+    week_offset: number | null;
+    start_date: string | null;
+    end_date: string | null;
+    id_activity: number | null;
+  }>
+) {
+  return throwIfError(
+    await supabase
+      .from("staff_schedules")
+      .update(data)
+      .eq("id_schedule", scheduleId)
+      .select("*, departments ( name, sites ( name ) ), recurrence_types ( name, cycle_weeks ), activity_templates ( name )")
+      .single()
+  );
+}
+
+export async function removeStaffSchedule(
+  supabase: SupabaseClient,
+  scheduleId: number
+) {
+  return throwIfError(
+    await supabase.from("staff_schedules").delete().eq("id_schedule", scheduleId)
+  );
 }
 
 // ============================================================

@@ -135,7 +135,7 @@ export function StaffSettings({ staffId, settings }: StaffSettingsProps) {
           max={10}
           value={adminTarget}
           onChange={(e) => setAdminTarget(parseInt(e.target.value) || 0)}
-          className="w-24 rounded-xl border border-border/50 bg-card px-3 py-2 text-sm text-center focus:ring-2 focus:ring-ring outline-none"
+          className="w-24 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-center text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 hover:border-slate-300 hover:shadow-sm transition-all"
         />
       </div>
 

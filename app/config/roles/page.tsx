@@ -87,7 +87,7 @@ export default function RolesConfigPage() {
                     <input
                       value={editName}
                       onChange={(e) => setEditName(e.target.value)}
-                      className="rounded-lg border border-border/50 bg-card px-2 py-1 text-sm w-48 focus:ring-2 focus:ring-ring outline-none"
+                      className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-sm text-slate-700 w-48 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 hover:border-slate-300 transition-all"
                       autoFocus
                     />
                   ) : (
@@ -109,7 +109,7 @@ export default function RolesConfigPage() {
                       onChange={(e) =>
                         setEditWeight(parseInt(e.target.value) || 0)
                       }
-                      className="rounded-lg border border-border/50 bg-card px-2 py-1 text-sm w-20 focus:ring-2 focus:ring-ring outline-none"
+                      className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-sm text-slate-700 w-20 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 hover:border-slate-300 transition-all"
                     />
                   ) : (
                     <div className="flex items-center gap-1">

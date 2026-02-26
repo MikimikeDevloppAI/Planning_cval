@@ -9,9 +9,11 @@ interface PopoverProps {
   onClose: () => void;
   children: ReactNode;
   align?: "start" | "center" | "end";
+  /** Force the popover to match the anchor width */
+  matchWidth?: boolean;
 }
 
-export function Popover({ anchor, open, onClose, children, align = "start" }: PopoverProps) {
+export function Popover({ anchor, open, onClose, children, align = "start", matchWidth = false }: PopoverProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
   const [visible, setVisible] = useState(false);
@@ -94,7 +96,10 @@ export function Popover({ anchor, open, onClose, children, align = "start" }: Po
         transition: "opacity 120ms ease-out, transform 120ms ease-out",
       }}
     >
-      <div className="bg-white rounded-xl shadow-xl border border-slate-200/60 backdrop-blur-sm overflow-hidden">
+      <div
+        className="bg-white rounded-xl shadow-xl border border-slate-200/60 backdrop-blur-sm overflow-hidden"
+        style={matchWidth && anchor ? { width: anchor.width } : undefined}
+      >
         {children}
       </div>
     </div>,

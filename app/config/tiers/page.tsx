@@ -20,6 +20,7 @@ import {
   Loader2,
 } from "lucide-react";
 import Link from "next/link";
+import { CustomSelect } from "@/components/ui/custom-select";
 
 interface Tier {
   id_tier: number;
@@ -170,58 +171,37 @@ export default function TiersConfigPage() {
               <label className="block text-xs font-medium text-muted-foreground mb-1">
                 Département
               </label>
-              <select
-                value={newDept}
-                onChange={(e) =>
-                  setNewDept(e.target.value ? parseInt(e.target.value) : "")
-                }
-                className="w-full rounded-xl border border-border/50 bg-card px-3 py-2 text-sm focus:ring-2 focus:ring-ring outline-none"
-              >
-                <option value="">Choisir...</option>
-                {allDepts.map((d) => (
-                  <option key={d.id_department} value={d.id_department}>
-                    {d.siteName} — {d.name}
-                  </option>
-                ))}
-              </select>
+              <CustomSelect
+                value={newDept ? String(newDept) : ""}
+                onChange={(v) => setNewDept(v ? parseInt(v) : "")}
+                options={allDepts.map((d) => ({ value: String(d.id_department), label: `${d.siteName} — ${d.name}` }))}
+                placeholder="Choisir..."
+                className="w-full"
+              />
             </div>
             <div>
               <label className="block text-xs font-medium text-muted-foreground mb-1">
                 Compétence
               </label>
-              <select
-                value={newSkill}
-                onChange={(e) =>
-                  setNewSkill(e.target.value ? parseInt(e.target.value) : "")
-                }
-                className="w-full rounded-xl border border-border/50 bg-card px-3 py-2 text-sm focus:ring-2 focus:ring-ring outline-none"
-              >
-                <option value="">Choisir...</option>
-                {skills.map((s) => (
-                  <option key={s.id_skill} value={s.id_skill}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
+              <CustomSelect
+                value={newSkill ? String(newSkill) : ""}
+                onChange={(v) => setNewSkill(v ? parseInt(v) : "")}
+                options={skills.map((s) => ({ value: String(s.id_skill), label: s.name }))}
+                placeholder="Choisir..."
+                className="w-full"
+              />
             </div>
             <div>
               <label className="block text-xs font-medium text-muted-foreground mb-1">
                 Rôle
               </label>
-              <select
-                value={newRole}
-                onChange={(e) =>
-                  setNewRole(e.target.value ? parseInt(e.target.value) : "")
-                }
-                className="w-full rounded-xl border border-border/50 bg-card px-3 py-2 text-sm focus:ring-2 focus:ring-ring outline-none"
-              >
-                <option value="">Choisir...</option>
-                {roles.map((r) => (
-                  <option key={r.id_role} value={r.id_role}>
-                    {r.name}
-                  </option>
-                ))}
-              </select>
+              <CustomSelect
+                value={newRole ? String(newRole) : ""}
+                onChange={(v) => setNewRole(v ? parseInt(v) : "")}
+                options={roles.map((r) => ({ value: String(r.id_role), label: r.name }))}
+                placeholder="Choisir..."
+                className="w-full"
+              />
             </div>
           </div>
           <div className="grid grid-cols-3 gap-3">
@@ -234,7 +214,7 @@ export default function TiersConfigPage() {
                 min={0}
                 value={newMin}
                 onChange={(e) => setNewMin(parseInt(e.target.value) || 0)}
-                className="w-full rounded-xl border border-border/50 bg-card px-3 py-2 text-sm focus:ring-2 focus:ring-ring outline-none"
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 hover:border-slate-300 hover:shadow-sm transition-all"
               />
             </div>
             <div>
@@ -246,7 +226,7 @@ export default function TiersConfigPage() {
                 min={0}
                 value={newMax}
                 onChange={(e) => setNewMax(parseInt(e.target.value) || 0)}
-                className="w-full rounded-xl border border-border/50 bg-card px-3 py-2 text-sm focus:ring-2 focus:ring-ring outline-none"
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 hover:border-slate-300 hover:shadow-sm transition-all"
               />
             </div>
             <div>
@@ -258,7 +238,7 @@ export default function TiersConfigPage() {
                 min={0}
                 value={newQty}
                 onChange={(e) => setNewQty(parseInt(e.target.value) || 0)}
-                className="w-full rounded-xl border border-border/50 bg-card px-3 py-2 text-sm focus:ring-2 focus:ring-ring outline-none"
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 hover:border-slate-300 hover:shadow-sm transition-all"
               />
             </div>
           </div>

@@ -13,6 +13,10 @@ import {
   removeStaffPreference,
   addStaffLeave,
   deleteStaffLeave,
+  updateStaffLeave,
+  addStaffSchedule,
+  updateStaffSchedule,
+  removeStaffSchedule,
 } from "@/lib/supabase/queries";
 
 // ---- Staff list ----
@@ -169,6 +173,103 @@ export function useDeleteLeave() {
       queryClient.invalidateQueries({ queryKey: ["staff", vars.staffId] });
       queryClient.invalidateQueries({ queryKey: ["planning"] });
       queryClient.invalidateQueries({ queryKey: ["leaves"] });
+    },
+  });
+}
+
+export function useUpdateLeave() {
+  const queryClient = useQueryClient();
+  const supabase = createClient();
+  return useMutation({
+    mutationFn: async ({
+      staffId,
+      leaveId,
+      data,
+    }: {
+      staffId: number;
+      leaveId: number;
+      data: { start_date: string; end_date: string; period: string | null };
+    }) => {
+      return updateStaffLeave(supabase, leaveId, data);
+    },
+    onSuccess: (_, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["staff", vars.staffId] });
+      queryClient.invalidateQueries({ queryKey: ["planning"] });
+      queryClient.invalidateQueries({ queryKey: ["leaves"] });
+    },
+  });
+}
+
+// ---- Schedules CRUD ----
+export function useAddSchedule() {
+  const queryClient = useQueryClient();
+  const supabase = createClient();
+  return useMutation({
+    mutationFn: async ({
+      staffId,
+      data,
+    }: {
+      staffId: number;
+      data: {
+        schedule_type: string;
+        day_of_week: number;
+        period: string;
+        id_department: number;
+        id_recurrence?: number | null;
+        week_offset?: number | null;
+        start_date?: string | null;
+        end_date?: string | null;
+        id_activity?: number | null;
+      };
+    }) => {
+      return addStaffSchedule(supabase, staffId, data);
+    },
+    onSuccess: (_, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["staff", vars.staffId] });
+    },
+  });
+}
+
+export function useUpdateSchedule() {
+  const queryClient = useQueryClient();
+  const supabase = createClient();
+  return useMutation({
+    mutationFn: async ({
+      staffId,
+      scheduleId,
+      data,
+    }: {
+      staffId: number;
+      scheduleId: number;
+      data: Partial<{
+        schedule_type: string;
+        day_of_week: number;
+        period: string;
+        id_department: number;
+        id_recurrence: number | null;
+        week_offset: number | null;
+        start_date: string | null;
+        end_date: string | null;
+        id_activity: number | null;
+      }>;
+    }) => {
+      return updateStaffSchedule(supabase, scheduleId, data);
+    },
+    onSuccess: (_, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["staff", vars.staffId] });
+    },
+  });
+}
+
+export function useRemoveSchedule() {
+  const queryClient = useQueryClient();
+  const supabase = createClient();
+  return useMutation({
+    mutationFn: async ({ staffId, scheduleId }: { staffId: number; scheduleId: number }) => {
+      return removeStaffSchedule(supabase, scheduleId);
+    },
+    onSuccess: (_, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["staff", vars.staffId] });
     },
   });
 }

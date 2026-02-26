@@ -175,7 +175,7 @@ export function SwapAssignmentDialog({
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
               placeholder="Rechercher..."
-              className="w-full pl-8 pr-3 py-2 text-sm rounded-lg border border-border/50 bg-card text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-ring outline-none"
+              className="w-full pl-8 pr-3 py-2 text-sm rounded-lg border border-slate-200 bg-white text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 hover:border-slate-300 hover:shadow-sm transition-all"
             />
           </div>
 

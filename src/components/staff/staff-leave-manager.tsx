@@ -1,10 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { useAddLeave, useDeleteLeave } from "@/hooks/use-staff";
+import { useAddLeave, useDeleteLeave, useUpdateLeave } from "@/hooks/use-staff";
 import { format, parseISO } from "date-fns";
 import { fr } from "date-fns/locale";
-import { Plus, Trash2, CalendarOff } from "lucide-react";
+import { Trash2, CalendarOff, Pencil, Check, X } from "lucide-react";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { CustomSelect } from "@/components/ui/custom-select";
+
+const PERIOD_OPTIONS = [
+  { value: "AM", label: "Matin (AM)" },
+  { value: "PM", label: "Après-midi (PM)" },
+];
+
 
 interface LeaveEntry {
   id_leave: number;
@@ -16,15 +24,27 @@ interface LeaveEntry {
 interface StaffLeaveManagerProps {
   staffId: number;
   leaves: LeaveEntry[];
+  showForm: boolean;
+  onToggleForm: (show: boolean) => void;
 }
 
-export function StaffLeaveManager({ staffId, leaves }: StaffLeaveManagerProps) {
+export function StaffLeaveManager({ staffId, leaves, showForm, onToggleForm }: StaffLeaveManagerProps) {
   const addLeave = useAddLeave();
   const deleteLeave = useDeleteLeave();
-  const [showForm, setShowForm] = useState(false);
+  const updateLeave = useUpdateLeave();
+
+  const [confirmDelete, setConfirmDelete] = useState<LeaveEntry | null>(null);
+  const [editingId, setEditingId] = useState<number | null>(null);
+
+  // Add form state
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [period, setPeriod] = useState<"AM" | "PM" | "">("");
+
+  // Edit form state
+  const [editStart, setEditStart] = useState("");
+  const [editEnd, setEditEnd] = useState("");
+  const [editPeriod, setEditPeriod] = useState<"AM" | "PM" | "">("");
 
   const handleAdd = () => {
     if (!startDate || !endDate) return;
@@ -39,11 +59,36 @@ export function StaffLeaveManager({ staffId, leaves }: StaffLeaveManagerProps) {
       },
       {
         onSuccess: () => {
-          setShowForm(false);
+          onToggleForm(false);
           setStartDate("");
           setEndDate("");
           setPeriod("");
         },
+      }
+    );
+  };
+
+  const startEdit = (leave: LeaveEntry) => {
+    setEditingId(leave.id_leave);
+    setEditStart(leave.start_date);
+    setEditEnd(leave.end_date);
+    setEditPeriod(leave.period ?? "");
+  };
+
+  const handleUpdate = () => {
+    if (!editingId || !editStart || !editEnd) return;
+    updateLeave.mutate(
+      {
+        staffId,
+        leaveId: editingId,
+        data: {
+          start_date: editStart,
+          end_date: editEnd,
+          period: editPeriod || null,
+        },
+      },
+      {
+        onSuccess: () => setEditingId(null),
       }
     );
   };
@@ -62,25 +107,12 @@ export function StaffLeaveManager({ staffId, leaves }: StaffLeaveManagerProps) {
     return "Journée complète";
   };
 
-  // Split into future and past
+  // Only show future / current leaves
   const today = new Date().toISOString().split("T")[0];
-  const futureLeaves = leaves.filter((l) => l.end_date >= today);
-  const pastLeaves = leaves.filter((l) => l.end_date < today);
+  const activeLeaves = leaves.filter((l) => l.end_date >= today);
 
   return (
-    <div className="space-y-4">
-      {!showForm && (
-        <div className="flex items-center justify-end">
-          <button
-            onClick={() => setShowForm(true)}
-            className="flex items-center gap-1 text-sm text-primary hover:text-primary-hover"
-          >
-            <Plus className="w-4 h-4" />
-            Déclarer
-          </button>
-        </div>
-      )}
-
+    <div className="space-y-3">
       {/* Add form */}
       {showForm && (
         <div className="bg-muted/30 rounded-xl border border-border/50 p-4 space-y-3">
@@ -96,7 +128,7 @@ export function StaffLeaveManager({ staffId, leaves }: StaffLeaveManagerProps) {
                   setStartDate(e.target.value);
                   if (!endDate) setEndDate(e.target.value);
                 }}
-                className="w-full rounded-xl border border-border/50 bg-card px-3 py-2 text-sm focus:ring-2 focus:ring-ring outline-none"
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 hover:border-slate-300 hover:shadow-sm transition-all"
               />
             </div>
             <div>
@@ -107,7 +139,7 @@ export function StaffLeaveManager({ staffId, leaves }: StaffLeaveManagerProps) {
                 type="date"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
-                className="w-full rounded-xl border border-border/50 bg-card px-3 py-2 text-sm focus:ring-2 focus:ring-ring outline-none"
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 hover:border-slate-300 hover:shadow-sm transition-all"
               />
             </div>
           </div>
@@ -115,19 +147,18 @@ export function StaffLeaveManager({ staffId, leaves }: StaffLeaveManagerProps) {
             <label className="block text-xs font-medium text-muted-foreground mb-1">
               Période
             </label>
-            <select
+            <CustomSelect
               value={period}
-              onChange={(e) => setPeriod(e.target.value as "AM" | "PM" | "")}
-              className="w-full rounded-xl border border-border/50 bg-card px-3 py-2 text-sm focus:ring-2 focus:ring-ring outline-none"
-            >
-              <option value="">Journée complète</option>
-              <option value="AM">Matin (AM)</option>
-              <option value="PM">Après-midi (PM)</option>
-            </select>
+              onChange={(v) => setPeriod(v as "AM" | "PM" | "")}
+              options={PERIOD_OPTIONS}
+              placeholder="Journée complète"
+              allowEmpty
+              className="w-full"
+            />
           </div>
           <div className="flex gap-2 justify-end">
             <button
-              onClick={() => setShowForm(false)}
+              onClick={() => onToggleForm(false)}
               className="px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted rounded-xl"
             >
               Annuler
@@ -143,26 +174,83 @@ export function StaffLeaveManager({ staffId, leaves }: StaffLeaveManagerProps) {
         </div>
       )}
 
-      {leaves.length === 0 && !showForm && (
+      {activeLeaves.length === 0 && !showForm && (
         <div className="text-center py-8 text-muted-foreground">
           <div className="w-14 h-14 rounded-2xl bg-muted/30 flex items-center justify-center mx-auto mb-3">
             <CalendarOff className="w-7 h-7" />
           </div>
-          <p className="text-sm">Aucune absence déclarée</p>
+          <p className="text-sm">Aucune absence à venir</p>
         </div>
       )}
 
-      {/* Future leaves */}
-      {futureLeaves.length > 0 && (
-        <div>
-          <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wider">
-            À venir / En cours
-          </p>
-          <div className="space-y-2">
-            {futureLeaves.map((leave) => (
+      {/* Active leaves */}
+      {activeLeaves.length > 0 && (
+        <div className="space-y-2">
+          {activeLeaves.map((leave) => {
+            const isEditing = editingId === leave.id_leave;
+
+            if (isEditing) {
+              return (
+                <div
+                  key={leave.id_leave}
+                  className="bg-muted/30 rounded-xl border border-primary/30 p-3 space-y-2"
+                >
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[10px] font-medium text-muted-foreground mb-0.5">
+                        Début
+                      </label>
+                      <input
+                        type="date"
+                        value={editStart}
+                        onChange={(e) => setEditStart(e.target.value)}
+                        className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 hover:border-slate-300 transition-all"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-medium text-muted-foreground mb-0.5">
+                        Fin
+                      </label>
+                      <input
+                        type="date"
+                        value={editEnd}
+                        onChange={(e) => setEditEnd(e.target.value)}
+                        className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 hover:border-slate-300 transition-all"
+                      />
+                    </div>
+                  </div>
+                  <CustomSelect
+                    value={editPeriod}
+                    onChange={(v) => setEditPeriod(v as "AM" | "PM" | "")}
+                    options={PERIOD_OPTIONS}
+                    placeholder="Journée complète"
+                    allowEmpty
+                    size="compact"
+                    className="w-full"
+                  />
+                  <div className="flex gap-1.5 justify-end">
+                    <button
+                      onClick={() => setEditingId(null)}
+                      className="p-1.5 text-muted-foreground hover:bg-muted rounded-lg transition-colors"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={handleUpdate}
+                      disabled={!editStart || !editEnd || updateLeave.isPending}
+                      className="p-1.5 text-success hover:bg-success/10 rounded-lg transition-colors disabled:opacity-50"
+                    >
+                      <Check className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              );
+            }
+
+            return (
               <div
                 key={leave.id_leave}
-                className="flex items-center justify-between bg-warning/5 border border-warning/20 rounded-xl px-4 py-2.5"
+                className="flex items-center justify-between bg-warning/5 border border-warning/20 rounded-xl px-4 py-2.5 group"
               >
                 <div>
                   <p className="text-sm font-medium text-foreground">
@@ -174,50 +262,51 @@ export function StaffLeaveManager({ staffId, leaves }: StaffLeaveManagerProps) {
                     {periodLabel(leave.period)}
                   </p>
                 </div>
-                <button
-                  onClick={() =>
-                    deleteLeave.mutate({ staffId, leaveId: leave.id_leave })
-                  }
-                  className="text-destructive/50 hover:text-destructive p-1 rounded-lg hover:bg-destructive/5 transition-colors"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => startEdit(leave)}
+                    className="text-muted-foreground/40 hover:text-primary p-1 rounded-lg hover:bg-primary/5 transition-colors opacity-0 group-hover:opacity-100"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => setConfirmDelete(leave)}
+                    className="text-destructive/50 hover:text-destructive p-1 rounded-lg hover:bg-destructive/5 transition-colors opacity-0 group-hover:opacity-100"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
-            ))}
-          </div>
+            );
+          })}
         </div>
       )}
 
-      {/* Past leaves */}
-      {pastLeaves.length > 0 && (
-        <div>
-          <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wider">
-            Historique
-          </p>
-          <div className="space-y-1">
-            {pastLeaves.slice(0, 10).map((leave) => (
-              <div
-                key={leave.id_leave}
-                className="flex items-center justify-between text-sm text-muted-foreground px-4 py-1.5 rounded-lg hover:bg-muted/30 transition-colors"
-              >
-                <span>
-                  {formatDate(leave.start_date)}
-                  {leave.start_date !== leave.end_date &&
-                    ` → ${formatDate(leave.end_date)}`}
-                  <span className="text-xs text-border ml-2">
-                    {periodLabel(leave.period)}
-                  </span>
-                </span>
-              </div>
-            ))}
-            {pastLeaves.length > 10 && (
-              <p className="text-xs text-border px-4">
-                ... et {pastLeaves.length - 10} autre(s)
-              </p>
-            )}
-          </div>
-        </div>
-      )}
+      <ConfirmDialog
+        open={!!confirmDelete}
+        variant="danger"
+        title="Supprimer cette absence ?"
+        message={
+          confirmDelete
+            ? `L'absence du ${formatDate(confirmDelete.start_date)}${
+                confirmDelete.start_date !== confirmDelete.end_date
+                  ? ` au ${formatDate(confirmDelete.end_date)}`
+                  : ""
+              } sera supprimée.`
+            : ""
+        }
+        confirmLabel="Supprimer"
+        onConfirm={() => {
+          if (confirmDelete) {
+            deleteLeave.mutate(
+              { staffId, leaveId: confirmDelete.id_leave },
+              { onSuccess: () => setConfirmDelete(null) }
+            );
+          }
+        }}
+        onCancel={() => setConfirmDelete(null)}
+        isPending={deleteLeave.isPending}
+      />
     </div>
   );
 }

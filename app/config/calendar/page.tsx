@@ -149,7 +149,7 @@ export default function CalendarConfigPage() {
               type="date"
               value={newDate}
               onChange={(e) => setNewDate(e.target.value)}
-              className="w-full rounded-xl border border-border/50 bg-card px-3 py-2 text-sm focus:ring-2 focus:ring-ring outline-none"
+              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 hover:border-slate-300 hover:shadow-sm transition-all"
             />
           </div>
           <div className="flex-1">
@@ -160,7 +160,7 @@ export default function CalendarConfigPage() {
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               placeholder="Ex: Noël, 1er Mai..."
-              className="w-full rounded-xl border border-border/50 bg-card px-3 py-2 text-sm focus:ring-2 focus:ring-ring outline-none"
+              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 hover:border-slate-300 hover:shadow-sm transition-all"
             />
           </div>
           <button
@@ -220,7 +220,7 @@ export default function CalendarConfigPage() {
                     <input
                       value={editName}
                       onChange={(e) => setEditName(e.target.value)}
-                      className="rounded-lg border border-border/50 bg-card px-2 py-1 text-sm w-40 focus:ring-2 focus:ring-ring outline-none"
+                      className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-sm text-slate-700 w-40 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 hover:border-slate-300 transition-all"
                       autoFocus
                     />
                     <button

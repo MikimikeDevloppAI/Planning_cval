@@ -7,6 +7,7 @@ import { toISODate } from "@/lib/utils/dates";
 import { X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { fetchStaffList, addStaffLeave } from "@/lib/supabase/queries";
+import { CustomSelect } from "@/components/ui/custom-select";
 
 interface StaffOption {
   id_staff: number;
@@ -84,18 +85,13 @@ export function AbsenceDialog() {
             <label className="block text-sm font-medium text-foreground mb-1">
               Personnel
             </label>
-            <select
-              className="w-full rounded-xl border border-border/50 bg-card px-3 py-2 text-sm focus:ring-2 focus:ring-ring outline-none"
-              value={selectedStaffId}
-              onChange={(e) => setSelectedStaffId(e.target.value ? parseInt(e.target.value) : "")}
-            >
-              <option value="">Sélectionner...</option>
-              {staffList.map((s) => (
-                <option key={s.id_staff} value={s.id_staff}>
-                  {s.lastname} {s.firstname}
-                </option>
-              ))}
-            </select>
+            <CustomSelect
+              value={selectedStaffId ? String(selectedStaffId) : ""}
+              onChange={(v) => setSelectedStaffId(v ? parseInt(v) : "")}
+              options={staffList.map((s) => ({ value: String(s.id_staff), label: `${s.lastname} ${s.firstname}` }))}
+              placeholder="Sélectionner..."
+              className="w-full"
+            />
           </div>
 
           {/* Date range */}
@@ -106,7 +102,7 @@ export function AbsenceDialog() {
               </label>
               <input
                 type="date"
-                className="w-full rounded-xl border border-border/50 bg-card px-3 py-2 text-sm focus:ring-2 focus:ring-ring outline-none"
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 hover:border-slate-300 hover:shadow-sm transition-all"
                 value={startDate}
                 onChange={(e) => {
                   setStartDate(e.target.value);
@@ -120,7 +116,7 @@ export function AbsenceDialog() {
               </label>
               <input
                 type="date"
-                className="w-full rounded-xl border border-border/50 bg-card px-3 py-2 text-sm focus:ring-2 focus:ring-ring outline-none"
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 hover:border-slate-300 hover:shadow-sm transition-all"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
               />
@@ -132,15 +128,17 @@ export function AbsenceDialog() {
             <label className="block text-sm font-medium text-foreground mb-1">
               Période
             </label>
-            <select
-              className="w-full rounded-xl border border-border/50 bg-card px-3 py-2 text-sm focus:ring-2 focus:ring-ring outline-none"
+            <CustomSelect
               value={period}
-              onChange={(e) => setPeriod(e.target.value as "AM" | "PM" | "")}
-            >
-              <option value="">Journée complète</option>
-              <option value="AM">Matin (AM)</option>
-              <option value="PM">Après-midi (PM)</option>
-            </select>
+              onChange={(v) => setPeriod(v as "AM" | "PM" | "")}
+              options={[
+                { value: "AM", label: "Matin (AM)" },
+                { value: "PM", label: "Après-midi (PM)" },
+              ]}
+              placeholder="Journée complète"
+              allowEmpty
+              className="w-full"
+            />
           </div>
 
           {result && (

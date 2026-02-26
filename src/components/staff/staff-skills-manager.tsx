@@ -5,6 +5,8 @@ import { useAddSkill, useRemoveSkill } from "@/hooks/use-staff";
 import { useQuery } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
 import { fetchSkills as fetchSkillsQuery } from "@/lib/supabase/queries";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { CustomSelect } from "@/components/ui/custom-select";
 import { Plus, Trash2, Stethoscope, Scissors } from "lucide-react";
 
 interface SkillEntry {
@@ -46,6 +48,7 @@ export function StaffSkillsManager({ staffId, skills }: StaffSkillsManagerProps)
 
   const [selectedSkill, setSelectedSkill] = useState<number | "">("");
   const [preference, setPreference] = useState(2);
+  const [confirmDelete, setConfirmDelete] = useState<SkillEntry | null>(null);
 
   const existingSkillIds = new Set(skills.map((s) => s.id_skill));
   const addableSkills = availableSkills.filter((s) => !existingSkillIds.has(s.id_skill));
@@ -91,7 +94,7 @@ export function StaffSkillsManager({ staffId, skills }: StaffSkillsManagerProps)
             {skill.preference} — {level.label}
           </span>
           <button
-            onClick={() => removeSkill.mutate({ staffId, skillId: skill.id_skill })}
+            onClick={() => setConfirmDelete(skill)}
             className="text-muted-foreground/40 hover:text-destructive p-1 rounded-lg hover:bg-destructive/5 transition-colors opacity-0 group-hover:opacity-100"
           >
             <Trash2 className="w-3.5 h-3.5" />
@@ -161,34 +164,28 @@ export function StaffSkillsManager({ staffId, skills }: StaffSkillsManagerProps)
             <label className="block text-xs font-medium text-muted-foreground mb-1">
               Ajouter une compétence
             </label>
-            <select
-              value={selectedSkill}
-              onChange={(e) =>
-                setSelectedSkill(e.target.value ? parseInt(e.target.value) : "")
-              }
-              className="w-full rounded-xl border border-border/50 bg-card px-3 py-2 text-sm focus:ring-2 focus:ring-ring outline-none"
-            >
-              <option value="">Choisir...</option>
-              {addableSkills.map((s) => (
-                <option key={s.id_skill} value={s.id_skill}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
+            <CustomSelect
+              value={selectedSkill ? String(selectedSkill) : ""}
+              onChange={(v) => setSelectedSkill(v ? parseInt(v) : "")}
+              options={addableSkills.map((s) => ({ value: String(s.id_skill), label: s.name }))}
+              placeholder="Choisir..."
+              className="w-full"
+            />
           </div>
           <div>
             <label className="block text-xs font-medium text-muted-foreground mb-1">
               Niveau
             </label>
-            <select
-              value={preference}
-              onChange={(e) => setPreference(parseInt(e.target.value))}
-              className="rounded-xl border border-border/50 bg-card px-3 py-2 text-sm focus:ring-2 focus:ring-ring outline-none"
-            >
-              <option value={1}>1 — Expert</option>
-              <option value={2}>2 — Confirmé</option>
-              <option value={3}>3 — Junior</option>
-            </select>
+            <CustomSelect
+              value={String(preference)}
+              onChange={(v) => setPreference(parseInt(v))}
+              options={[
+                { value: "1", label: "1 — Expert" },
+                { value: "2", label: "2 — Confirmé" },
+                { value: "3", label: "3 — Junior" },
+              ]}
+              placeholder="Niveau"
+            />
           </div>
           <button
             onClick={handleAdd}
@@ -199,6 +196,24 @@ export function StaffSkillsManager({ staffId, skills }: StaffSkillsManagerProps)
           </button>
         </div>
       )}
+
+      <ConfirmDialog
+        open={!!confirmDelete}
+        variant="danger"
+        title="Supprimer cette compétence ?"
+        message={`La compétence « ${confirmDelete?.skills?.name ?? ""} » sera retirée de ce profil.`}
+        confirmLabel="Supprimer"
+        onConfirm={() => {
+          if (confirmDelete) {
+            removeSkill.mutate(
+              { staffId, skillId: confirmDelete.id_skill },
+              { onSuccess: () => setConfirmDelete(null) }
+            );
+          }
+        }}
+        onCancel={() => setConfirmDelete(null)}
+        isPending={removeSkill.isPending}
+      />
     </div>
   );
 }

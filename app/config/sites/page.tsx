@@ -139,7 +139,7 @@ export default function SitesConfigPage() {
                   <input
                     value={editName}
                     onChange={(e) => setEditName(e.target.value)}
-                    className="flex-1 rounded-lg border border-border/50 bg-card px-2 py-1 text-sm focus:ring-2 focus:ring-ring outline-none"
+                    className="flex-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 hover:border-slate-300 transition-all"
                     autoFocus
                   />
                   <button
@@ -192,7 +192,7 @@ export default function SitesConfigPage() {
                         <input
                           value={editName}
                           onChange={(e) => setEditName(e.target.value)}
-                          className="flex-1 rounded-lg border border-border/50 bg-card px-2 py-1 text-sm focus:ring-2 focus:ring-ring outline-none"
+                          className="flex-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 hover:border-slate-300 transition-all"
                           autoFocus
                         />
                         <button
@@ -260,7 +260,7 @@ export default function SitesConfigPage() {
                       value={newDeptName}
                       onChange={(e) => setNewDeptName(e.target.value)}
                       placeholder="Nom du département..."
-                      className="flex-1 rounded-lg border border-border/50 bg-card px-2 py-1 text-sm focus:ring-2 focus:ring-ring outline-none"
+                      className="flex-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 hover:border-slate-300 transition-all"
                       autoFocus
                     />
                     <button

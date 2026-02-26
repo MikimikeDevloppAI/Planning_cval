@@ -278,6 +278,7 @@ export default function PlanningPage() {
                 setSelectedDeptName(null);
               }}
               placeholder="Tous les sites"
+              allowEmpty
             />
 
             {/* Department filter */}
@@ -286,6 +287,7 @@ export default function PlanningPage() {
               value={selectedDeptName ?? ""}
               onChange={(v) => setSelectedDeptName(v || null)}
               placeholder="Tous les départements"
+              allowEmpty
             />
 
             {/* Person search */}

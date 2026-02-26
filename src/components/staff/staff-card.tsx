@@ -6,6 +6,7 @@ import { POSITION_LABELS } from "@/lib/constants";
 import { useUpdateStaff } from "@/hooks/use-staff";
 import { cn } from "@/lib/utils";
 import { ArrowLeft, Check, X } from "lucide-react";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -25,6 +26,7 @@ export function StaffCard({ staff }: StaffCardProps) {
   const [editing, setEditing] = useState(false);
   const [firstname, setFirstname] = useState(staff.firstname);
   const [lastname, setLastname] = useState(staff.lastname);
+  const [confirmToggle, setConfirmToggle] = useState(false);
 
   const colors = getPositionColors(staff.id_primary_position);
 
@@ -86,13 +88,13 @@ export function StaffCard({ staff }: StaffCardProps) {
                   <input
                     value={firstname}
                     onChange={(e) => setFirstname(e.target.value)}
-                    className="text-lg font-semibold text-foreground border border-border/50 rounded-xl px-3 py-1.5 w-40 bg-card focus:ring-2 focus:ring-primary/30 outline-none"
+                    className="text-lg font-semibold text-slate-700 border border-slate-200 rounded-lg px-3 py-1.5 w-40 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 hover:border-slate-300 transition-all"
                     placeholder="Prénom"
                   />
                   <input
                     value={lastname}
                     onChange={(e) => setLastname(e.target.value)}
-                    className="text-lg font-semibold text-foreground border border-border/50 rounded-xl px-3 py-1.5 w-40 bg-card focus:ring-2 focus:ring-primary/30 outline-none"
+                    className="text-lg font-semibold text-slate-700 border border-slate-200 rounded-lg px-3 py-1.5 w-40 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 hover:border-slate-300 transition-all"
                     placeholder="Nom"
                   />
                   <button
@@ -150,12 +152,7 @@ export function StaffCard({ staff }: StaffCardProps) {
 
             {/* Activate/Deactivate button */}
             <button
-              onClick={() =>
-                updateStaff.mutate({
-                  id: staff.id_staff,
-                  data: { is_active: !staff.is_active },
-                })
-              }
+              onClick={() => setConfirmToggle(true)}
               className={cn(
                 "text-sm px-4 py-2 rounded-xl border transition-all duration-200 font-medium",
                 staff.is_active
@@ -168,6 +165,26 @@ export function StaffCard({ staff }: StaffCardProps) {
           </div>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={confirmToggle}
+        variant={staff.is_active ? "danger" : "default"}
+        title={staff.is_active ? "Désactiver ce profil ?" : "Réactiver ce profil ?"}
+        message={
+          staff.is_active
+            ? `${staff.firstname} ${staff.lastname} ne sera plus assignable dans le planning.`
+            : `${staff.firstname} ${staff.lastname} sera de nouveau disponible pour les assignations.`
+        }
+        confirmLabel={staff.is_active ? "Désactiver" : "Activer"}
+        onConfirm={() => {
+          updateStaff.mutate(
+            { id: staff.id_staff, data: { is_active: !staff.is_active } },
+            { onSuccess: () => setConfirmToggle(false) }
+          );
+        }}
+        onCancel={() => setConfirmToggle(false)}
+        isPending={updateStaff.isPending}
+      />
     </>
   );
 }
