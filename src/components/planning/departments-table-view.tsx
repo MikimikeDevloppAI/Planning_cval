@@ -19,6 +19,9 @@ import { fr } from "date-fns/locale";
 import { UserCircle2, CalendarOff, Check, Send, XCircle, Move, ArrowLeftRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { buildInitialsMap } from "@/lib/utils/initials";
+import { ROLE_TAG } from "@/lib/constants";
+import { weekSepStyle } from "@/lib/utils/planning-helpers";
+import type { LeaveEntry } from "@/lib/types/planning-views";
 
 import { useMoveAssignment, useMoveDoctorSchedule, useCancelAssignment, useUpdateAssignmentStatus } from "@/hooks/use-assignments";
 import { Popover } from "@/components/ui/popover";
@@ -26,6 +29,8 @@ import { DropdownMenu } from "@/components/ui/dropdown-menu";
 import { QuickAbsenceDialog } from "@/components/dialogs/quick-absence-dialog";
 import { MoveAssignmentDialog } from "@/components/dialogs/move-assignment-dialog";
 import { SwapAssignmentDialog } from "@/components/dialogs/swap-assignment-dialog";
+import { RoleSelectionDialog } from "@/components/dialogs/role-selection-dialog";
+import { resolveRoleOptions, type RoleSelectionData } from "@/lib/utils/role-selection";
 import type {
   PlanningSite,
   PlanningBlock,
@@ -34,32 +39,9 @@ import type {
   AssignmentSource,
 } from "@/lib/types/database";
 
-/** Role id → short label (role 1 = Standard, no tag) */
-const ROLE_TAG: Record<number, string> = {
-  2: "1f",
-  3: "2f",
-};
-
 /** Fixed width for the first column */
 const COL1 = "w-[180px] min-w-[180px] max-w-[180px]";
-const COL1_SHADOW = "2px 0 0 0 #cbd5e1"; // persistent right border via box-shadow (survives sticky scroll)
-
-/** Border-left for week separators — subtle left border on Monday columns */
-function weekSepStyle(isWkStart: boolean, isFirstCol: boolean): React.CSSProperties | undefined {
-  if (isWkStart && !isFirstCol) {
-    return { borderLeft: "2px solid rgb(203 213 225)" }; // slate-300
-  }
-  return undefined;
-}
-
-interface LeaveEntry {
-  id_leave: number;
-  id_staff: number;
-  start_date: string;
-  end_date: string;
-  period: "AM" | "PM" | null;
-  staff: { firstname: string; lastname: string; id_primary_position: number } | null;
-}
+const COL1_SHADOW = "2px 0 0 0 #cbd5e1";
 
 interface DepartmentsTableViewProps {
   days: string[];
@@ -117,7 +99,10 @@ interface CellDropData {
   deptId: number;
   deptName: string;
   date: string;
-  blocks: PlanningBlock[];
+  amBlocks: PlanningBlock[];
+  pmBlocks: PlanningBlock[];
+  amNeeds: StaffingNeed[];
+  pmNeeds: StaffingNeed[];
 }
 
 function mergeAssignments(amBlocks: PlanningBlock[], pmBlocks: PlanningBlock[]): DayPerson[] {
@@ -217,6 +202,15 @@ export function DepartmentsTableView({ days, sites, leaves = [] }: DepartmentsTa
   // Pending drop: FULL day person needs user to choose AM/PM/FULL
   const [pendingDrop, setPendingDrop] = useState<PendingDrop | null>(null);
 
+  // Role selection: secretary needs to pick a role for the target block
+  const [roleSelection, setRoleSelection] = useState<{
+    assignmentId: number;
+    dragData: ChipDragData;
+    dropData: CellDropData;
+    period: "AM" | "PM";
+    selectionData: RoleSelectionData;
+  } | null>(null);
+
   useEffect(() => {
     if (!scrollRef.current) return;
     const todayStr = format(new Date(), "yyyy-MM-dd");
@@ -254,14 +248,21 @@ export function DepartmentsTableView({ days, sites, leaves = [] }: DepartmentsTa
     assignmentId: number,
     period: "AM" | "PM",
     dragData: ChipDragData,
-    dropData: CellDropData
+    dropData: CellDropData,
+    linkedDoctorId?: number | null,
+    activityId?: number | null,
   ) => {
+    // Resolve real department ID from blocks (virtual depts like Administration use id_dept=-2000
+    // but the actual work_blocks have the real id_department)
+    const periodBlocks = period === "PM" ? dropData.pmBlocks : dropData.amBlocks;
+    const realDeptId = periodBlocks[0]?.id_department ?? dropData.deptId;
+
     // Doctor → write directly into assignments (CANCEL old + INSERT new MANUAL)
     if (dragData.personType === "DOCTOR") {
       moveDoctorSchedule.mutate({
         staffId: dragData.personId,
         sourceAssignmentId: assignmentId,
-        targetDeptId: dropData.deptId,
+        targetDeptId: realDeptId,
         targetDate: dropData.date,
         period,
         activityId: dragData.activityId,
@@ -271,20 +272,49 @@ export function DepartmentsTableView({ days, sites, leaves = [] }: DepartmentsTa
       return;
     }
 
-    // Secretary → move assignment directly
-    const targetBlock = dropData.blocks[0];
-    if (!targetBlock) return;
-
+    // Secretary → backend resolves the target block from (dept, date, period)
     moveAssignment.mutate({
       oldAssignmentId: assignmentId,
-      targetBlockId: targetBlock.id_block,
+      targetDeptId: realDeptId,
+      targetDate: dropData.date,
+      period,
       staffId: dragData.personId,
       assignmentType: dragData.personType,
       roleId: dragData.roleId,
       skillId: dragData.skillId,
+      linkedDoctorId: linkedDoctorId ?? null,
+      activityId: activityId ?? null,
       personName: dragData.personName,
       idPrimaryPosition: dragData.idPrimaryPosition,
     });
+  };
+
+  /** Check if role selection is needed before executing a secretary move */
+  const executeWithRoleCheck = (
+    assignmentId: number,
+    period: "AM" | "PM",
+    dragData: ChipDragData,
+    dropData: CellDropData,
+  ) => {
+    if (dragData.personType !== "SECRETARY") {
+      executeMoveOne(assignmentId, period, dragData, dropData);
+      return;
+    }
+    const periodNeeds = period === "PM" ? dropData.pmNeeds : dropData.amNeeds;
+    const periodBlocks = period === "PM" ? dropData.pmBlocks : dropData.amBlocks;
+    const selData = resolveRoleOptions(periodBlocks, periodNeeds);
+
+    if (selData.autoSelect !== null) {
+      executeMoveOne(
+        assignmentId, period,
+        { ...dragData, roleId: selData.autoSelect.roleId ?? dragData.roleId },
+        dropData,
+        selData.autoSelect.linkedDoctorId,
+        selData.autoSelect.activityId,
+      );
+    } else {
+      setRoleSelection({ assignmentId, dragData, dropData, period, selectionData: selData });
+    }
   };
 
   /** Handle user choice from the period popover for FULL day drops */
@@ -294,15 +324,15 @@ export function DepartmentsTableView({ days, sites, leaves = [] }: DepartmentsTa
     setPendingDrop(null);
 
     if (choice === "FULL") {
-      executeMoveOne(dragData.assignmentId, "AM", dragData, dropData);
+      executeWithRoleCheck(dragData.assignmentId, "AM", dragData, dropData);
       if (dragData.pmAssignmentId) {
-        executeMoveOne(dragData.pmAssignmentId, "PM", dragData, dropData);
+        executeWithRoleCheck(dragData.pmAssignmentId, "PM", dragData, dropData);
       }
     } else if (choice === "AM") {
-      executeMoveOne(dragData.assignmentId, "AM", dragData, dropData);
+      executeWithRoleCheck(dragData.assignmentId, "AM", dragData, dropData);
     } else {
       if (dragData.pmAssignmentId) {
-        executeMoveOne(dragData.pmAssignmentId, "PM", dragData, dropData);
+        executeWithRoleCheck(dragData.pmAssignmentId, "PM", dragData, dropData);
       }
     }
   };
@@ -320,10 +350,11 @@ export function DepartmentsTableView({ days, sites, leaves = [] }: DepartmentsTa
     if (dragData.deptId === dropData.deptId && dragData.date === dropData.date) return;
 
     // No blocks in destination — skip
-    if (dropData.blocks.length === 0) return;
+    if (dropData.amBlocks.length === 0 && dropData.pmBlocks.length === 0) return;
 
     // Don't drop doctors on ADMIN blocks
-    if (dragData.personType === "DOCTOR" && dropData.blocks.every((b) => b.block_type === "ADMIN")) return;
+    const allBlocks = [...dropData.amBlocks, ...dropData.pmBlocks];
+    if (dragData.personType === "DOCTOR" && allBlocks.every((b) => b.block_type === "ADMIN")) return;
 
     // Always show confirmation popover
     const overEl = document.getElementById(over.id as string);
@@ -566,13 +597,12 @@ export function DepartmentsTableView({ days, sites, leaves = [] }: DepartmentsTa
 
                           const merged = mergeAssignments(day.am.blocks, day.pm.blocks);
                           const needs = [...day.am.needs, ...day.pm.needs];
-                          const allBlocks = [...day.am.blocks, ...day.pm.blocks];
 
                           return (
                             <td
                               key={day.date}
                               className={cn(
-                                "px-1.5 py-1.5 align-top border-b border-r border-slate-200",
+                                "px-1.5 py-1.5 border-b border-r border-slate-200 h-1",
                                 today && "bg-sky-50"
                               )}
                               style={weekSepStyle(isWkStart, dayIdx === 0)}
@@ -581,7 +611,10 @@ export function DepartmentsTableView({ days, sites, leaves = [] }: DepartmentsTa
                                 deptId={dept.id_department}
                                 deptName={dept.name}
                                 date={day.date}
-                                blocks={allBlocks}
+                                amBlocks={day.am.blocks}
+                                pmBlocks={day.pm.blocks}
+                                amNeeds={day.am.needs}
+                                pmNeeds={day.pm.needs}
                               >
                                 <DayCard
                                   people={merged}
@@ -718,7 +751,7 @@ export function DepartmentsTableView({ days, sites, leaves = [] }: DepartmentsTa
                 <button
                   onClick={() => {
                     const period = pendingDrop.dragData.period === "PM" ? "PM" as const : "AM" as const;
-                    executeMoveOne(pendingDrop.dragData.assignmentId, period, pendingDrop.dragData, pendingDrop.dropData);
+                    executeWithRoleCheck(pendingDrop.dragData.assignmentId, period, pendingDrop.dragData, pendingDrop.dropData);
                     setPendingDrop(null);
                   }}
                   className="flex-1 px-3 py-1.5 text-[13px] font-medium text-white bg-primary hover:bg-primary/90 rounded-lg transition-colors"
@@ -768,6 +801,30 @@ export function DepartmentsTableView({ days, sites, leaves = [] }: DepartmentsTa
           sites={sites}
         />
       )}
+      {roleSelection && (
+        <RoleSelectionDialog
+          open
+          onClose={() => setRoleSelection(null)}
+          onConfirm={(selection) => {
+            const { assignmentId, dragData, dropData, period } = roleSelection;
+            setRoleSelection(null);
+            executeMoveOne(
+              assignmentId,
+              period,
+              { ...dragData, roleId: selection.roleId ?? dragData.roleId },
+              dropData,
+              selection.linkedDoctorId,
+              selection.activityId,
+            );
+          }}
+          personName={roleSelection.dragData.personName}
+          sourceDeptName={roleSelection.dragData.deptName}
+          targetDeptName={roleSelection.dropData.deptName}
+          selectionData={roleSelection.selectionData}
+          currentRoleId={roleSelection.dragData.roleId}
+          isPending={moveAssignment.isPending}
+        />
+      )}
     </DndContext>
   );
 }
@@ -779,19 +836,25 @@ function DroppableCell({
   deptId,
   deptName,
   date,
-  blocks,
+  amBlocks,
+  pmBlocks,
+  amNeeds,
+  pmNeeds,
   children,
 }: {
   deptId: number;
   deptName: string;
   date: string;
-  blocks: PlanningBlock[];
+  amBlocks: PlanningBlock[];
+  pmBlocks: PlanningBlock[];
+  amNeeds: StaffingNeed[];
+  pmNeeds: StaffingNeed[];
   children: React.ReactNode;
 }) {
   const cellId = `cell-${deptId}-${date}`;
   const { setNodeRef, isOver } = useDroppable({
     id: cellId,
-    data: { deptId, deptName, date, blocks } satisfies CellDropData,
+    data: { deptId, deptName, date, amBlocks, pmBlocks, amNeeds, pmNeeds } satisfies CellDropData,
   });
 
   return (
@@ -799,7 +862,7 @@ function DroppableCell({
       id={cellId}
       ref={setNodeRef}
       className={cn(
-        "rounded-md transition-all duration-100 min-h-[28px]",
+        "rounded-md transition-all duration-100 min-h-[28px] h-full",
         isOver && "ring-2 ring-primary/40 bg-primary/5"
       )}
     >

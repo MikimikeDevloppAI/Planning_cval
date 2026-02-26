@@ -8,5 +8,6 @@ out/
 *.tsbuildinfo
 next-env.d.ts
 output/
+coverage/
 nul
 0

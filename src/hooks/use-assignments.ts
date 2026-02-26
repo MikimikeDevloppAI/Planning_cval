@@ -77,7 +77,10 @@ function addAssignment(data: PlanningData, blockId: number, assignment: Planning
   };
 }
 
-/** Find a block in the cache by dept + date + period */
+/** Find a block in the cache by dept + date + period.
+ *  First tries matching by dept.id_department, then falls back to
+ *  matching by block.id_department (handles virtual depts like Administration
+ *  where dept.id_department=-2000 but blocks have the real id like 8). */
 function findBlockId(
   data: PlanningData,
   deptId: number,
@@ -90,9 +93,19 @@ function findBlockId(
       for (const day of dept.days) {
         if (day.date !== date) continue;
         const periodData = period === "AM" ? day.am : day.pm;
-        // Return the first non-ADMIN block, or fallback to first block
         const medical = periodData.blocks.find((b) => b.block_type !== "ADMIN");
         return (medical ?? periodData.blocks[0])?.id_block ?? null;
+      }
+    }
+  }
+  // Fallback: search by real id_department stored in blocks (for virtual depts)
+  for (const site of data.sites) {
+    for (const dept of site.departments) {
+      for (const day of dept.days) {
+        if (day.date !== date) continue;
+        const periodData = period === "AM" ? day.am : day.pm;
+        const match = periodData.blocks.find((b) => b.id_department === deptId);
+        if (match) return match.id_block;
       }
     }
   }
@@ -137,11 +150,15 @@ function rollbackQueries(
 
 interface MoveAssignmentParams {
   oldAssignmentId: number;
-  targetBlockId: number;
+  targetDeptId: number;
+  targetDate: string;
+  period: "AM" | "PM";
   staffId: number;
   assignmentType: "DOCTOR" | "SECRETARY";
   roleId: number | null;
   skillId: number | null;
+  linkedDoctorId?: number | null;
+  activityId?: number | null;
   // For optimistic update
   personName: string;
   idPrimaryPosition: 1 | 2 | 3;
@@ -178,11 +195,15 @@ export function useMoveAssignment() {
     mutationFn: (params: MoveAssignmentParams) =>
       moveAssignmentQuery(supabase, {
         oldAssignmentId: params.oldAssignmentId,
-        targetBlockId: params.targetBlockId,
+        targetDeptId: params.targetDeptId,
+        targetDate: params.targetDate,
+        period: params.period,
         staffId: params.staffId,
         assignmentType: params.assignmentType,
         roleId: params.roleId,
         skillId: params.skillId,
+        linkedDoctorId: params.linkedDoctorId,
+        activityId: params.activityId,
       }),
     onMutate: async (params) => {
       await queryClient.cancelQueries({ queryKey: ["planning"] });
@@ -191,28 +212,40 @@ export function useMoveAssignment() {
       const [firstname, ...lastParts] = params.personName.split(" ");
       const lastname = lastParts.join(" ");
 
-      for (const [key, data] of queryClient.getQueriesData<PlanningData>({ queryKey: ["planning"] })) {
-        if (!data) continue;
-        let updated = removeAssignment(data, params.oldAssignmentId);
-        updated = addAssignment(updated, params.targetBlockId, {
-          id_assignment: -Date.now(),
-          id_staff: params.staffId,
-          firstname: firstname ?? "",
-          lastname,
-          assignment_type: params.assignmentType,
-          id_role: params.roleId,
-          role_name: null,
-          id_skill: params.skillId,
-          skill_name: null,
-          id_activity: null,
-          activity_name: null,
-          id_linked_doctor: null,
-          source: "MANUAL",
-          status: "PROPOSED",
-          id_primary_position: params.idPrimaryPosition,
-          id_schedule: null,
-        });
-        queryClient.setQueryData(key, updated);
+      // Resolve target block from cache for optimistic update
+      const targetBlockId = (() => {
+        for (const [, data] of queryClient.getQueriesData<PlanningData>({ queryKey: ["planning"] })) {
+          if (!data) continue;
+          const id = findBlockId(data, params.targetDeptId, params.targetDate, params.period);
+          if (id) return id;
+        }
+        return null;
+      })();
+
+      if (targetBlockId) {
+        for (const [key, data] of queryClient.getQueriesData<PlanningData>({ queryKey: ["planning"] })) {
+          if (!data) continue;
+          let updated = removeAssignment(data, params.oldAssignmentId);
+          updated = addAssignment(updated, targetBlockId, {
+            id_assignment: -Date.now(),
+            id_staff: params.staffId,
+            firstname: firstname ?? "",
+            lastname,
+            assignment_type: params.assignmentType,
+            id_role: params.roleId,
+            role_name: null,
+            id_skill: params.skillId,
+            skill_name: null,
+            id_activity: params.activityId ?? null,
+            activity_name: null,
+            id_linked_doctor: params.linkedDoctorId ?? null,
+            source: "MANUAL",
+            status: "PROPOSED",
+            id_primary_position: params.idPrimaryPosition,
+            id_schedule: null,
+          });
+          queryClient.setQueryData(key, updated);
+        }
       }
 
       return { snapshots };
@@ -318,6 +351,9 @@ export function useUpdateAssignmentStatus() {
   return useMutation({
     mutationFn: (params: UpdateStatusParams) =>
       updateAssignmentStatusQuery(supabase, params.id_assignment, params.status),
+    onError: (error) => {
+      console.error("Failed to update assignment status:", error.message);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["planning"] });
     },

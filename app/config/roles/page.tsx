@@ -27,7 +27,7 @@ export default function RolesConfigPage() {
   });
 
   const updateRole = useMutation({
-    mutationFn: async ({ id, data }: { id: number; data: Record<string, unknown> }) => {
+    mutationFn: async ({ id, data }: { id: number; data: Partial<{ name: string; hardship_weight: number }> }) => {
       return updateRoleQuery(supabase, id, data);
     },
     onSuccess: () => {

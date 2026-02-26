@@ -75,17 +75,25 @@ export function StaffPrefsManager({ staffId, preferences }: StaffPrefsManagerPro
     sites.find((s) => s.id_site === selectedSite)?.departments ?? [];
 
   const handleAdd = () => {
-    const data: Record<string, unknown> = {
+    const data: {
+      target_type: TargetType;
+      preference: PreferenceLevel;
+      id_site?: number | null;
+      id_department?: number | null;
+      id_role?: number | null;
+      day_of_week?: string | null;
+      reason?: string | null;
+    } = {
       target_type: targetType,
       preference: prefLevel,
       day_of_week: dayOfWeek || null,
       reason: reason || null,
     };
 
-    if (targetType === "SITE" && selectedSite) data.id_site = selectedSite;
+    if (targetType === "SITE" && selectedSite) data.id_site = selectedSite as number;
     if (targetType === "DEPARTMENT" && selectedDept)
-      data.id_department = selectedDept;
-    if (targetType === "ROLE" && selectedRole) data.id_role = selectedRole;
+      data.id_department = selectedDept as number;
+    if (targetType === "ROLE" && selectedRole) data.id_role = selectedRole as number;
 
     addPref.mutate(
       { staffId, data },

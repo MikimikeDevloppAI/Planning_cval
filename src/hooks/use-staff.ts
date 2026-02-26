@@ -43,7 +43,21 @@ export function useUpdateStaff() {
   const queryClient = useQueryClient();
   const supabase = createClient();
   return useMutation({
-    mutationFn: async ({ id, data }: { id: number; data: Record<string, unknown> }) => {
+    mutationFn: async ({
+      id,
+      data,
+    }: {
+      id: number;
+      data: Partial<{
+        firstname: string;
+        lastname: string;
+        is_active: boolean;
+        id_primary_position: number;
+        email: string | null;
+        phone: string | null;
+        target_pct: number;
+      }>;
+    }) => {
       return updateStaff(supabase, id, data);
     },
     onSuccess: (_, vars) => {
@@ -118,7 +132,22 @@ export function useAddPreference() {
   const queryClient = useQueryClient();
   const supabase = createClient();
   return useMutation({
-    mutationFn: async ({ staffId, data }: { staffId: number; data: Record<string, unknown> }) => {
+    mutationFn: async ({
+      staffId,
+      data,
+    }: {
+      staffId: number;
+      data: {
+        target_type: "SITE" | "DEPARTMENT" | "ROLE" | "STAFF";
+        preference: "INTERDIT" | "EVITER" | "PREFERE";
+        id_site?: number | null;
+        id_department?: number | null;
+        id_target_staff?: number | null;
+        id_role?: number | null;
+        day_of_week?: string | null;
+        reason?: string | null;
+      };
+    }) => {
       return addStaffPreference(supabase, staffId, data);
     },
     onSuccess: (_, vars) => {
@@ -162,7 +191,7 @@ export function useAddLeave() {
   });
 }
 
-export function useDeleteLeave() {
+export function useRemoveLeave() {
   const queryClient = useQueryClient();
   const supabase = createClient();
   return useMutation({

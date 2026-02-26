@@ -5,47 +5,15 @@ import { format, isToday, isMonday, parseISO } from "date-fns";
 import { fr } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { getInitials } from "@/lib/utils/initials";
-import { POSITION_LABELS } from "@/lib/constants";
+import { POSITION_LABELS, ROLE_TAG, PERIOD_LABELS, PERIOD_ORDER } from "@/lib/constants";
+import { weekSepStyle, abbreviateSite, abbreviateDept } from "@/lib/utils/planning-helpers";
+import type { LeaveEntry } from "@/lib/types/planning-views";
 import type { PlanningSite, PlanningAssignment } from "@/lib/types/database";
 
 type FilterType = "tous" | "medecins" | "secretaires";
 
 /** Fixed width for the first column */
 const COL1 = "w-[200px] min-w-[200px] max-w-[200px]";
-
-/** Border-left for week separators */
-function weekSepStyle(isWkStart: boolean, isFirstCol: boolean): React.CSSProperties | undefined {
-  if (isWkStart && !isFirstCol) {
-    return { borderLeft: "2px solid rgb(203 213 225)" };
-  }
-  return undefined;
-}
-
-/** Role id → short tag */
-const ROLE_TAG: Record<number, string> = { 2: "1f", 3: "2f" };
-
-/** Abbreviate known site names */
-const SITE_ABBREV: Record<string, string> = {
-  "clinique la vallée": "CVAL",
-  "porrentruy": "PTY",
-};
-
-function abbreviateSite(name: string): string {
-  return SITE_ABBREV[name.toLowerCase().trim()] ?? name.slice(0, 4).toUpperCase();
-}
-
-function abbreviateDept(name: string): string {
-  return name.length <= 10 ? name : name.slice(0, 9) + ".";
-}
-
-interface LeaveEntry {
-  id_leave: number;
-  id_staff: number;
-  start_date: string;
-  end_date: string;
-  period: "AM" | "PM" | null;
-  staff: { firstname: string; lastname: string; id_primary_position: number } | null;
-}
 
 interface CollaborateursTableViewProps {
   days: string[];
@@ -73,14 +41,6 @@ interface CollaborateurData {
   days: Map<string, PersonDay[]>;
 }
 
-const periodLabels: Record<string, string> = {
-  AM: "Matin",
-  PM: "Après-midi",
-  FULL_DAY: "Journée",
-  FULL: "Journée",
-};
-
-const PERIOD_ORDER: Record<string, number> = { AM: 0, FULL_DAY: 1, PM: 2 };
 
 export function CollaborateursTableView({
   days,
@@ -361,7 +321,7 @@ export function CollaborateursTableView({
                           {leaveType && (
                             <Badge
                               label="ABS"
-                              sub={periodLabels[leaveType]}
+                              sub={PERIOD_LABELS[leaveType]}
                               variant="absence"
                               period={leaveType === "FULL" ? "FULL_DAY" : leaveType}
                               tooltip={
@@ -370,7 +330,7 @@ export function CollaborateursTableView({
                                   <div className="text-slate-300 mt-0.5">{isDoc ? "Médecin" : "Secrétaire"}</div>
                                   <div className="flex items-center gap-1.5 mt-1 text-red-300 font-medium">
                                     <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
-                                    Absent(e) — {periodLabels[leaveType]}
+                                    Absent(e) — {PERIOD_LABELS[leaveType]}
                                   </div>
                                 </div>
                               }
@@ -405,7 +365,7 @@ export function CollaborateursTableView({
                                       {(a.period === "PM" || a.period === "FULL_DAY") && (
                                         <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
                                       )}
-                                      <span className="text-slate-300">{periodLabels[a.period]}</span>
+                                      <span className="text-slate-300">{PERIOD_LABELS[a.period]}</span>
                                     </div>
                                     {a.roleName && (
                                       <div className="text-slate-400 mt-0.5 text-[10px]">

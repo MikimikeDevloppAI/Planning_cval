@@ -61,7 +61,7 @@ export default function SitesConfigPage() {
   });
 
   const updateDept = useMutation({
-    mutationFn: async ({ id, data }: { id: number; data: Record<string, unknown> }) => {
+    mutationFn: async ({ id, data }: { id: number; data: Partial<{ name: string; is_active: boolean; id_site: number }> }) => {
       return updateDepartment(supabase, id, data);
     },
     onSuccess: () => {

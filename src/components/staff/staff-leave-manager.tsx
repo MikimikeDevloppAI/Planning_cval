@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useAddLeave, useDeleteLeave, useUpdateLeave } from "@/hooks/use-staff";
+import { useAddLeave, useRemoveLeave, useUpdateLeave } from "@/hooks/use-staff";
 import { format, parseISO } from "date-fns";
 import { fr } from "date-fns/locale";
 import { Trash2, CalendarOff, Pencil, Check, X } from "lucide-react";
@@ -30,7 +30,7 @@ interface StaffLeaveManagerProps {
 
 export function StaffLeaveManager({ staffId, leaves, showForm, onToggleForm }: StaffLeaveManagerProps) {
   const addLeave = useAddLeave();
-  const deleteLeave = useDeleteLeave();
+  const deleteLeave = useRemoveLeave();
   const updateLeave = useUpdateLeave();
 
   const [confirmDelete, setConfirmDelete] = useState<LeaveEntry | null>(null);

@@ -93,7 +93,14 @@ export default function TiersConfigPage() {
   });
 
   const addTier = useMutation({
-    mutationFn: async (data: Record<string, unknown>) => {
+    mutationFn: async (data: {
+      id_department: number;
+      id_skill: number | null;
+      id_role: number | null;
+      min_doctors: number;
+      max_doctors: number;
+      quantity: number;
+    }) => {
       return createTierQuery(supabase, data);
     },
     onSuccess: () => {
@@ -252,9 +259,9 @@ export default function TiersConfigPage() {
             <button
               onClick={() =>
                 addTier.mutate({
-                  id_department: newDept,
-                  id_skill: newSkill,
-                  id_role: newRole,
+                  id_department: newDept as number,
+                  id_skill: newSkill as number,
+                  id_role: newRole as number,
                   min_doctors: newMin,
                   max_doctors: newMax,
                   quantity: newQty,

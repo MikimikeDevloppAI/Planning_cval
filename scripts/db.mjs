@@ -14,13 +14,17 @@
  *   node scripts/db.mjs -q "SELECT * FROM assignments WHERE assignment_type = 'DOCTOR' LIMIT 5"
  */
 
+import "dotenv/config";
 import { readFileSync } from "fs";
 import { resolve } from "path";
 import pg from "pg";
 
-const DATABASE_URL =
-  process.env.DATABASE_URL ||
-  "postgresql://postgres:sDZM2YplbpCH7Rb0@db.wqqexwaqduneeyisfiht.supabase.co:5432/postgres";
+const DATABASE_URL = process.env.DATABASE_URL;
+if (!DATABASE_URL) {
+  console.error("Error: DATABASE_URL environment variable is required.");
+  console.error("Set it in your .env file or export it before running this script.");
+  process.exit(1);
+}
 
 const pool = new pg.Pool({
   connectionString: DATABASE_URL,

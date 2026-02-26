@@ -24,7 +24,64 @@ import {
   Plus,
 } from "lucide-react";
 
-// ─── Tab definitions for secretaries ─────────────────────
+// ─── Shared types ────────────────────────────────────────
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type StaffAssignment = Record<string, any>;
+
+interface StaffLeave {
+  id_leave: number;
+  start_date: string;
+  end_date: string;
+  period: "AM" | "PM" | null;
+}
+
+interface StaffSchedule {
+  id_schedule: number;
+  schedule_type: string;
+  day_of_week: number | null;
+  period: string;
+  week_offset: number | null;
+  is_active: boolean;
+  id_department: number | null;
+  id_recurrence: number | null;
+  id_activity: number | null;
+  start_date: string | null;
+  end_date: string | null;
+  departments: { name: string; sites: { name: string } | null } | null;
+  recurrence_types: { name: string; cycle_weeks: number } | null;
+  activity_templates: { name: string } | null;
+}
+
+interface StaffSkill {
+  id_skill: number;
+  preference: number;
+  skills: { name: string } | null;
+}
+
+interface StaffPreference {
+  id_preference: number;
+  target_type: "SITE" | "DEPARTMENT" | "ROLE" | "STAFF";
+  id_site: number | null;
+  id_department: number | null;
+  id_target_staff: number | null;
+  id_role: number | null;
+  preference: "INTERDIT" | "EVITER" | "PREFERE";
+  day_of_week: string | null;
+  reason: string | null;
+  sites?: { name: string } | null;
+  departments?: { name: string } | null;
+  secretary_roles?: { name: string } | null;
+}
+
+interface SecretarySettingsData {
+  is_flexible: boolean;
+  flexibility_pct: number;
+  full_day_only: boolean;
+  admin_target: number;
+}
+
+// ─── Tab definitions ─────────────────────────────────────
 
 type SecretaryTab = "planning" | "config";
 
@@ -33,7 +90,7 @@ const SECRETARY_TABS: { id: SecretaryTab; label: string; icon: React.ElementType
   { id: "config", label: "Configuration", icon: Sliders },
 ];
 
-// ─── Quick stat card ─────────────────────────────────────
+// ─── Reusable UI components ──────────────────────────────
 
 function QuickStat({
   icon,
@@ -78,8 +135,6 @@ function QuickStat({
   );
 }
 
-// ─── Section wrapper ─────────────────────────────────────
-
 function SectionCard({
   title,
   icon: Icon,
@@ -110,11 +165,24 @@ function SectionCard({
   );
 }
 
+function AddButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex items-center gap-1 text-xs text-primary hover:text-primary-hover transition-colors"
+    >
+      <Plus className="w-3.5 h-3.5" />
+      Ajouter
+    </button>
+  );
+}
+
 // ─── Main page ───────────────────────────────────────────
 
 export default function StaffDetailPage() {
   const params = useParams();
-  const staffId = params.id ? parseInt(params.id as string) : null;
+  const parsed = params.id ? parseInt(params.id as string) : NaN;
+  const staffId = Number.isNaN(parsed) ? null : parsed;
   const { data, isLoading, error } = useStaffDetail(staffId);
   const [activeTab, setActiveTab] = useState<SecretaryTab>("planning");
 
@@ -143,22 +211,18 @@ export default function StaffDetailPage() {
   return (
     <div className="h-full overflow-auto p-6">
       <div className="max-w-6xl mx-auto">
-        {/* Profile header */}
         <StaffCard staff={staff} />
 
-        {/* Quick stats */}
         <StatsRow
-          assignments={assignments}
-          leaves={leaves}
+          assignments={assignments as StaffAssignment[]}
+          leaves={leaves as StaffLeave[]}
           skills={skills}
           preferences={preferences}
           isSecretary={isSecretary}
         />
 
-        {/* Secretary: 2 tabs  |  Doctor: direct content */}
         {isSecretary ? (
           <>
-            {/* Tab bar */}
             <div className="mb-5">
               <div className="inline-flex items-center bg-muted/40 p-1 rounded-xl border border-border/20">
                 {SECRETARY_TABS.map((tab) => {
@@ -188,30 +252,29 @@ export default function StaffDetailPage() {
               </div>
             </div>
 
-            {/* Tab content */}
             {activeTab === "planning" ? (
-              <PlanningTab
+              <StaffPlanningContent
                 staffId={staff.id_staff}
-                assignments={assignments}
-                leaves={leaves}
-                schedules={schedules}
+                assignments={assignments as StaffAssignment[]}
+                leaves={leaves as StaffLeave[]}
+                schedules={schedules as StaffSchedule[]}
+                animate
               />
             ) : (
               <ConfigTab
                 staffId={staff.id_staff}
-                skills={skills}
-                preferences={preferences}
-                settings={settings}
+                skills={skills as StaffSkill[]}
+                preferences={preferences as StaffPreference[]}
+                settings={settings as SecretarySettingsData | null}
               />
             )}
           </>
         ) : (
-          /* Doctor: just calendar + leaves */
-          <DoctorContent
+          <StaffPlanningContent
             staffId={staff.id_staff}
-            assignments={assignments}
-            leaves={leaves}
-            schedules={schedules}
+            assignments={assignments as StaffAssignment[]}
+            leaves={leaves as StaffLeave[]}
+            schedules={schedules as StaffSchedule[]}
           />
         )}
       </div>
@@ -219,47 +282,36 @@ export default function StaffDetailPage() {
   );
 }
 
-// ─── Planning tab (Calendar + Congés + Planning récurrent) ───
+// ─── Planning content (shared between Secretary tab & Doctor view) ───
 
-function PlanningTab({
+function StaffPlanningContent({
   staffId,
   assignments,
   leaves,
   schedules,
+  animate = false,
 }: {
   staffId: number;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  assignments: any[];
-  leaves: { id_leave: number; start_date: string; end_date: string; period: "AM" | "PM" | null }[];
-  schedules: { id_schedule: number; schedule_type: string; day_of_week: number | null; period: string; week_offset: number | null; is_active: boolean; id_department: number | null; id_recurrence: number | null; id_activity: number | null; start_date: string | null; end_date: string | null; departments: { name: string; sites: { name: string } | null } | null; recurrence_types: { name: string; cycle_weeks: number } | null; activity_templates: { name: string } | null }[];
+  assignments: StaffAssignment[];
+  leaves: StaffLeave[];
+  schedules: StaffSchedule[];
+  animate?: boolean;
 }) {
   const [showLeaveForm, setShowLeaveForm] = useState(false);
   const [showScheduleForm, setShowScheduleForm] = useState(false);
 
-  const addButton = (onClick: () => void) => (
-    <button
-      onClick={onClick}
-      className="flex items-center gap-1 text-xs text-primary hover:text-primary-hover transition-colors"
-    >
-      <Plus className="w-3.5 h-3.5" />
-      Ajouter
-    </button>
-  );
-
   return (
-    <div className="space-y-4 animate-fade-in-up">
-      {/* Calendar full width */}
+    <div className={cn("space-y-4", animate && "animate-fade-in-up")}>
       <SectionCard title="Calendrier" icon={Calendar}>
         <StaffCalendar assignments={assignments} leaves={leaves} />
       </SectionCard>
 
-      {/* Planning récurrent (2/3) + Congés (1/3) */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <SectionCard
           title="Planning récurrent"
           icon={Clock}
           className="lg:col-span-2"
-          action={!showScheduleForm ? addButton(() => setShowScheduleForm(true)) : undefined}
+          action={!showScheduleForm ? <AddButton onClick={() => setShowScheduleForm(true)} /> : undefined}
         >
           <StaffScheduleViewer
             staffId={staffId}
@@ -272,7 +324,7 @@ function PlanningTab({
         <SectionCard
           title="Congés & Absences"
           icon={CalendarOff}
-          action={!showLeaveForm ? addButton(() => setShowLeaveForm(true)) : undefined}
+          action={!showLeaveForm ? <AddButton onClick={() => setShowLeaveForm(true)} /> : undefined}
         >
           <StaffLeaveManager
             staffId={staffId}
@@ -286,7 +338,7 @@ function PlanningTab({
   );
 }
 
-// ─── Config tab (Compétences + Préférences + Paramètres) ───
+// ─── Config tab ──────────────────────────────────────────
 
 function ConfigTab({
   staffId,
@@ -295,36 +347,16 @@ function ConfigTab({
   settings,
 }: {
   staffId: number;
-  skills: { id_skill: number; preference: number; skills: { name: string } | null }[];
-  preferences: {
-    id_preference: number;
-    target_type: "SITE" | "DEPARTMENT" | "ROLE" | "STAFF";
-    id_site: number | null;
-    id_department: number | null;
-    id_target_staff: number | null;
-    id_role: number | null;
-    preference: "INTERDIT" | "EVITER" | "PREFERE";
-    day_of_week: string | null;
-    reason: string | null;
-    sites?: { name: string } | null;
-    departments?: { name: string } | null;
-    secretary_roles?: { name: string } | null;
-  }[];
-  settings: {
-    is_flexible: boolean;
-    flexibility_pct: number;
-    full_day_only: boolean;
-    admin_target: number;
-  } | null;
+  skills: StaffSkill[];
+  preferences: StaffPreference[];
+  settings: SecretarySettingsData | null;
 }) {
   return (
     <div className="space-y-4 animate-fade-in-up">
-      {/* Compétences full width */}
       <SectionCard title="Compétences" icon={Award}>
         <StaffSkillsManager staffId={staffId} skills={skills} />
       </SectionCard>
 
-      {/* Préférences + Paramètres side by side */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <SectionCard title="Préférences" icon={Heart}>
           <StaffPrefsManager staffId={staffId} preferences={preferences} />
@@ -332,71 +364,6 @@ function ConfigTab({
 
         <SectionCard title="Paramètres" icon={Settings}>
           <StaffSettings staffId={staffId} settings={settings} />
-        </SectionCard>
-      </div>
-    </div>
-  );
-}
-
-// ─── Doctor content (no tabs, just calendar + leaves) ────
-
-function DoctorContent({
-  staffId,
-  assignments,
-  leaves,
-  schedules,
-}: {
-  staffId: number;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  assignments: any[];
-  leaves: { id_leave: number; start_date: string; end_date: string; period: "AM" | "PM" | null }[];
-  schedules: { id_schedule: number; schedule_type: string; day_of_week: number | null; period: string; week_offset: number | null; is_active: boolean; id_department: number | null; id_recurrence: number | null; id_activity: number | null; start_date: string | null; end_date: string | null; departments: { name: string; sites: { name: string } | null } | null; recurrence_types: { name: string; cycle_weeks: number } | null; activity_templates: { name: string } | null }[];
-}) {
-  const [showLeaveForm, setShowLeaveForm] = useState(false);
-  const [showScheduleForm, setShowScheduleForm] = useState(false);
-
-  const addButton = (onClick: () => void) => (
-    <button
-      onClick={onClick}
-      className="flex items-center gap-1 text-xs text-primary hover:text-primary-hover transition-colors"
-    >
-      <Plus className="w-3.5 h-3.5" />
-      Ajouter
-    </button>
-  );
-
-  return (
-    <div className="space-y-4">
-      <SectionCard title="Calendrier" icon={Calendar}>
-        <StaffCalendar assignments={assignments} leaves={leaves} />
-      </SectionCard>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <SectionCard
-          title="Planning récurrent"
-          icon={Clock}
-          className="lg:col-span-2"
-          action={!showScheduleForm ? addButton(() => setShowScheduleForm(true)) : undefined}
-        >
-          <StaffScheduleViewer
-            staffId={staffId}
-            schedules={schedules}
-            showForm={showScheduleForm}
-            onToggleForm={setShowScheduleForm}
-          />
-        </SectionCard>
-
-        <SectionCard
-          title="Congés & Absences"
-          icon={CalendarOff}
-          action={!showLeaveForm ? addButton(() => setShowLeaveForm(true)) : undefined}
-        >
-          <StaffLeaveManager
-            staffId={staffId}
-            leaves={leaves}
-            showForm={showLeaveForm}
-            onToggleForm={setShowLeaveForm}
-          />
         </SectionCard>
       </div>
     </div>
@@ -412,16 +379,15 @@ function StatsRow({
   preferences,
   isSecretary,
 }: {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  assignments: any[];
-  leaves: { end_date: string }[];
+  assignments: StaffAssignment[];
+  leaves: StaffLeave[];
   skills: unknown[];
   preferences: unknown[];
   isSecretary: boolean;
 }) {
   const currentMonthAssignments = useMemo(() => {
     const monthStr = format(new Date(), "yyyy-MM");
-    return assignments.filter((a: { work_blocks?: { date?: string } }) =>
+    return assignments.filter((a) =>
       a.work_blocks?.date?.startsWith(monthStr)
     ).length;
   }, [assignments]);
