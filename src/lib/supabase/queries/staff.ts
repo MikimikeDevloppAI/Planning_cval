@@ -175,6 +175,15 @@ export async function removeStaffSkill(supabase: SupabaseClient, staffId: number
   );
 }
 
+export async function fetchAllStaffSkills(supabase: SupabaseClient) {
+  return throwIfError(
+    await supabase
+      .from("staff_skills")
+      .select("id_staff, id_skill, preference, staff ( firstname, lastname, id_primary_position ), skills ( name, category )")
+      .order("id_skill")
+  );
+}
+
 // ============================================================
 // Staff — Preferences
 // ============================================================
@@ -255,14 +264,14 @@ export async function deleteStaffLeave(supabase: SupabaseClient, leaveId: number
   const leave = throwIfError(
     await supabase
       .from("staff_leaves")
-      .select("id_leave, id_staff, start_date, end_date")
-      .eq("id_leave", leaveId)
+      .select("id_absence, id_staff, start_date, end_date")
+      .eq("id_absence", leaveId)
       .single()
   );
 
   if (!leave) throw new Error(`Leave not found: ${leaveId}`);
 
-  throwIfError(await supabase.from("staff_leaves").delete().eq("id_leave", leaveId));
+  throwIfError(await supabase.from("staff_leaves").delete().eq("id_absence", leaveId));
 
   // Restore assignments from recurring schedules via RPC
   await supabase.rpc("fn_restore_assignments_for_leave", {
@@ -283,7 +292,7 @@ export async function updateStaffLeave(
     await supabase
       .from("staff_leaves")
       .update(data)
-      .eq("id_leave", leaveId)
+      .eq("id_absence", leaveId)
       .select("*")
       .single()
   );
@@ -376,5 +385,14 @@ export async function fetchMonthLeaves(
       .lte("start_date", endDate)
       .gte("end_date", startDate)
       .order("start_date")
+  );
+}
+
+export async function fetchAllLeaves(supabase: SupabaseClient) {
+  return throwIfError(
+    await supabase
+      .from("staff_leaves")
+      .select("id_absence, id_staff, start_date, end_date, period, staff ( firstname, lastname, id_primary_position )")
+      .order("start_date", { ascending: false })
   );
 }

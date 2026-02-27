@@ -14,6 +14,8 @@ import {
   addStaffLeave,
   deleteStaffLeave,
   updateStaffLeave,
+  fetchAllLeaves,
+  fetchAllStaffSkills,
   addStaffSchedule,
   updateStaffSchedule,
   removeStaffSchedule,
@@ -93,6 +95,14 @@ export function useUpdateSecretarySettings() {
 }
 
 // ---- Skills CRUD ----
+export function useAllStaffSkills() {
+  const supabase = createClient();
+  return useQuery({
+    queryKey: ["staff-skills", "all"],
+    queryFn: () => fetchAllStaffSkills(supabase),
+  });
+}
+
 export function useAddSkill() {
   const queryClient = useQueryClient();
   const supabase = createClient();
@@ -110,6 +120,7 @@ export function useAddSkill() {
     },
     onSuccess: (_, vars) => {
       queryClient.invalidateQueries({ queryKey: ["staff", vars.staffId] });
+      queryClient.invalidateQueries({ queryKey: ["staff-skills"] });
     },
   });
 }
@@ -123,6 +134,7 @@ export function useRemoveSkill() {
     },
     onSuccess: (_, vars) => {
       queryClient.invalidateQueries({ queryKey: ["staff", vars.staffId] });
+      queryClient.invalidateQueries({ queryKey: ["staff-skills"] });
     },
   });
 }
@@ -300,5 +312,15 @@ export function useRemoveSchedule() {
     onSuccess: (_, vars) => {
       queryClient.invalidateQueries({ queryKey: ["staff", vars.staffId] });
     },
+  });
+}
+
+// ── Leaves (global) ──────────────────────────────────────
+
+export function useAllLeaves() {
+  const supabase = createClient();
+  return useQuery({
+    queryKey: ["leaves", "all"],
+    queryFn: () => fetchAllLeaves(supabase),
   });
 }

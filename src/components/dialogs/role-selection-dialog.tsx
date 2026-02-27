@@ -4,15 +4,18 @@ import { useState } from "react";
 import { X, UserCog, Loader2, Stethoscope } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { RoleSelectionData } from "@/lib/utils/role-selection";
+import { slotKey } from "@/lib/utils/role-selection";
+
+export interface RoleSelectionResult {
+  roleId: number | null;
+  skillId: number | null;
+  linkedDoctorId: number | null;
+}
 
 interface RoleSelectionDialogProps {
   open: boolean;
   onClose: () => void;
-  onConfirm: (selection: {
-    roleId: number | null;
-    linkedDoctorId: number | null;
-    activityId: number | null;
-  }) => void;
+  onConfirm: (selection: RoleSelectionResult) => void;
   personName: string;
   sourceDeptName: string;
   targetDeptName: string;
@@ -32,14 +35,29 @@ export function RoleSelectionDialog({
   currentRoleId,
   isPending,
 }: RoleSelectionDialogProps) {
-  const { isSurgery, roles, operations } = selectionData;
+  const { isSurgery, slots, operations } = selectionData;
 
-  // Pre-select current role if it exists among options
-  const [selectedRoleId, setSelectedRoleId] = useState<number | null>(() => {
-    if (roles.some((r) => r.id_role === currentRoleId)) return currentRoleId;
-    // Pre-select the first role with a gap
-    const firstWithGap = roles.find((r) => r.gap > 0);
-    return firstWithGap?.id_role ?? roles[0]?.id_role ?? null;
+  // Determine label mode: only show the dimension that varies
+  const distinctRoles = new Set(slots.map((s) => s.id_role));
+  const distinctSkills = new Set(slots.map((s) => s.id_skill));
+  const showRoleOnly = distinctSkills.size <= 1 && distinctRoles.size > 1;
+  const showSkillOnly = distinctRoles.size <= 1 && distinctSkills.size > 1;
+  // else: show both (or surgery which always shows skill only)
+
+  const getSlotLabel = (s: typeof slots[0]) => {
+    if (isSurgery || s.id_role === null) return s.skill_name;
+    if (showRoleOnly) return s.role_name ?? `Rôle ${s.id_role}`;
+    if (showSkillOnly) return s.skill_name;
+    return `${s.role_name ?? `Rôle ${s.id_role}`} — ${s.skill_name}`;
+  };
+
+  // Pre-select: match current role if available, else first with gap
+  const [selectedSlot, setSelectedSlot] = useState<string | null>(() => {
+    if (slots.length === 0) return null;
+    const matchingCurrent = slots.find((s) => s.id_role === currentRoleId);
+    if (matchingCurrent) return slotKey(matchingCurrent);
+    const firstWithGap = slots.find((s) => s.gap > 0);
+    return slotKey(firstWithGap ?? slots[0]);
   });
 
   const [selectedDoctorId, setSelectedDoctorId] = useState<number | null>(
@@ -48,20 +66,30 @@ export function RoleSelectionDialog({
 
   if (!open) return null;
 
-  const selectedOp = operations.find((o) => o.id_linked_doctor === selectedDoctorId);
-
-  const canConfirm = isSurgery
-    ? selectedRoleId !== null && selectedDoctorId !== null
-    : selectedRoleId !== null;
+  const needOp = isSurgery && operations.length > 0;
+  const canConfirm =
+    (slots.length === 0 || selectedSlot !== null) &&
+    (!needOp || selectedDoctorId !== null);
 
   const handleConfirm = () => {
     if (!canConfirm) return;
+    const slot = slots.find((s) => slotKey(s) === selectedSlot);
     onConfirm({
-      roleId: selectedRoleId,
+      // DB constraint chk_secretary requires id_role NOT NULL for secretaries.
+      // Surgery slots have id_role=null → default to 1 (Standard).
+      roleId: slot?.id_role ?? 1,
+      skillId: slot?.id_skill ?? null,
       linkedDoctorId: selectedDoctorId,
-      activityId: selectedOp?.id_activity ?? null,
     });
   };
+
+  const title = isSurgery
+    ? "Assignation bloc opératoire"
+    : showRoleOnly
+      ? "Choisir le rôle"
+      : showSkillOnly
+        ? "Choisir la compétence"
+        : "Choisir le poste";
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
@@ -72,9 +100,7 @@ export function RoleSelectionDialog({
             <div className="p-2 rounded-lg bg-primary/10">
               <UserCog className="w-5 h-5 text-primary" />
             </div>
-            <h3 className="text-base font-semibold text-foreground">
-              Choisir le rôle
-            </h3>
+            <h3 className="text-base font-semibold text-foreground">{title}</h3>
           </div>
           <button onClick={onClose} className="text-muted-foreground hover:text-foreground transition-colors">
             <X className="w-5 h-5" />
@@ -137,48 +163,51 @@ export function RoleSelectionDialog({
             </div>
           )}
 
-          {/* Role selection */}
-          {roles.length > 0 && (
+          {/* Slot selection (coupled role+skill) */}
+          {slots.length > 0 && (
             <div>
               <label className="block text-sm font-medium text-foreground mb-2">
-                Rôle
+                {isSurgery ? "Compétence" : showRoleOnly ? "Rôle" : showSkillOnly ? "Compétence" : "Poste"}
               </label>
               <div className="space-y-1.5">
-                {roles.map((role) => (
-                  <button
-                    key={role.id_role}
-                    onClick={() => setSelectedRoleId(role.id_role)}
-                    className={cn(
-                      "w-full flex items-center justify-between px-3 py-2.5 text-left rounded-lg border transition-all",
-                      selectedRoleId === role.id_role
-                        ? "bg-primary/5 border-primary/40 ring-1 ring-primary/20"
-                        : "bg-card border-border/50 hover:bg-muted/30 hover:border-border"
-                    )}
-                  >
-                    <div className="flex items-center gap-2.5">
+                {slots.map((slot) => {
+                  const key = slotKey(slot);
+                  return (
+                    <button
+                      key={key}
+                      onClick={() => setSelectedSlot(key)}
+                      className={cn(
+                        "w-full flex items-center justify-between px-3 py-2.5 text-left rounded-lg border transition-all",
+                        selectedSlot === key
+                          ? "bg-primary/5 border-primary/40 ring-1 ring-primary/20"
+                          : "bg-card border-border/50 hover:bg-muted/30 hover:border-border"
+                      )}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <span className={cn(
+                          "w-2 h-2 rounded-full shrink-0",
+                          slot.gap > 0 ? "bg-red-500" : "bg-emerald-500"
+                        )} />
+                        <span className={cn(
+                          "text-sm font-medium",
+                          selectedSlot === key ? "text-foreground" : "text-foreground/80"
+                        )}>
+                          {getSlotLabel(slot)}
+                        </span>
+                      </div>
                       <span className={cn(
-                        "w-2 h-2 rounded-full shrink-0",
-                        role.gap > 0 ? "bg-red-500" : "bg-emerald-500"
-                      )} />
-                      <span className={cn(
-                        "text-sm font-medium",
-                        selectedRoleId === role.id_role ? "text-foreground" : "text-foreground/80"
+                        "text-xs font-medium px-2 py-0.5 rounded-full",
+                        slot.gap > 0
+                          ? "bg-red-100 text-red-700"
+                          : "bg-slate-100 text-slate-500"
                       )}>
-                        {role.role_name}
+                        {slot.gap > 0
+                          ? `${slot.gap} manque${slot.gap > 1 ? "s" : ""}`
+                          : "complet"}
                       </span>
-                    </div>
-                    <span className={cn(
-                      "text-xs font-medium px-2 py-0.5 rounded-full",
-                      role.gap > 0
-                        ? "bg-red-100 text-red-700"
-                        : "bg-slate-100 text-slate-500"
-                    )}>
-                      {role.gap > 0
-                        ? `${role.gap} manque${role.gap > 1 ? "s" : ""}`
-                        : "complet"}
-                    </span>
-                  </button>
-                ))}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           )}

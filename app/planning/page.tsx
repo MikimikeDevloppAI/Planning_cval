@@ -18,6 +18,7 @@ import {
   RefreshCw,
   ChevronDown,
   Filter,
+  Search,
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -200,7 +201,7 @@ export default function PlanningPage() {
           </div>
 
           {/* Center: View tabs */}
-          <div className="flex items-center gap-1 p-1 bg-muted/50 rounded-xl border border-border/30">
+          <div className="flex gap-0.5 bg-muted/50 rounded-lg p-0.5 border border-border/30">
             <TabButton
               active={viewMode === "departments"}
               onClick={() => setViewMode("departments")}
@@ -265,11 +266,23 @@ export default function PlanningPage() {
 
       {/* Filter bar — separated from header */}
       {data && (
-        <div className="shrink-0 mx-4 mt-3 bg-card rounded-xl border border-border/40 shadow-[0_1px_3px_rgba(0,0,0,0.06)] px-4 py-2.5">
+        <div className="shrink-0 mx-4 mt-3 bg-card rounded-xl border border-border/50 shadow-subtle px-4 py-2">
           <div className="flex items-center gap-3">
-            <Filter className="w-4 h-4 text-muted-foreground shrink-0" />
+            {/* Person search */}
+            <div className="relative flex-1 min-w-[180px] max-w-sm">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/50" />
+              <input
+                type="text"
+                value={searchText}
+                onChange={(e) => setSearchText(e.target.value)}
+                placeholder="Rechercher une personne..."
+                className="w-full h-8 pl-8 pr-3 text-sm rounded-lg border-0 bg-muted/50 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+              />
+            </div>
 
-            {/* Site filter */}
+            <div className="w-px h-5 bg-border/50" />
+
+            {/* Site + Department filters */}
             <CustomSelect
               options={siteOptions.map((s) => ({ value: String(s.id), label: s.name }))}
               value={selectedSiteId !== null ? String(selectedSiteId) : ""}
@@ -279,24 +292,16 @@ export default function PlanningPage() {
               }}
               placeholder="Tous les sites"
               allowEmpty
+              className="min-w-[160px]"
             />
 
-            {/* Department filter */}
             <CustomSelect
               options={deptOptions.map((d) => ({ value: d, label: d }))}
               value={selectedDeptName ?? ""}
               onChange={(v) => setSelectedDeptName(v || null)}
               placeholder="Tous les départements"
               allowEmpty
-            />
-
-            {/* Person search */}
-            <input
-              type="text"
-              value={searchText}
-              onChange={(e) => setSearchText(e.target.value)}
-              placeholder="Rechercher une personne..."
-              className="h-8 px-2.5 text-sm rounded-lg border border-border/50 bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/30 w-48"
+              className="min-w-[200px]"
             />
 
             {/* Clear filters */}

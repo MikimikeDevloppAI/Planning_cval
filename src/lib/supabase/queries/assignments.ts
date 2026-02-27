@@ -1,6 +1,9 @@
 import type { SupabaseClient } from "../helpers";
 import { throwIfError } from "../helpers";
 
+/**
+ * Move a secretary via atomic RPC: CANCEL old + find block + UPSERT new in one transaction.
+ */
 export async function moveAssignment(
   supabase: SupabaseClient,
   params: {
@@ -9,57 +12,24 @@ export async function moveAssignment(
     targetDate: string;
     period: "AM" | "PM";
     staffId: number;
-    assignmentType?: string;
-    roleId?: number | null;
-    skillId?: number | null;
-    linkedDoctorId?: number | null;
-    activityId?: number | null;
+    roleId: number | null;
+    skillId: number | null;
+    linkedDoctorId: number | null;
   }
 ) {
-  // Cancel old assignment
-  throwIfError(
-    await supabase
-      .from("assignments")
-      .update({ status: "CANCELLED", updated_at: new Date().toISOString() })
-      .eq("id_assignment", params.oldAssignmentId)
-  );
+  const { data, error } = await supabase.rpc("fn_move_secretary", {
+    p_old_assignment_id: params.oldAssignmentId,
+    p_target_dept_id: params.targetDeptId,
+    p_target_date: params.targetDate,
+    p_target_period: params.period,
+    p_staff_id: params.staffId,
+    p_role_id: params.roleId ?? 1,
+    p_skill_id: params.skillId,
+    p_linked_doctor_id: params.linkedDoctorId,
+  });
 
-  // Find the target block
-  const { data: targetBlock, error: blockErr } = await supabase
-    .from("work_blocks")
-    .select("id_block")
-    .eq("id_department", params.targetDeptId)
-    .eq("date", params.targetDate)
-    .eq("period", params.period)
-    .single();
-
-  if (blockErr || !targetBlock) {
-    throw new Error(
-      `Target block not found for dept=${params.targetDeptId} date=${params.targetDate} period=${params.period}`
-    );
-  }
-
-  // Upsert new assignment at target
-  return throwIfError(
-    await supabase
-      .from("assignments")
-      .upsert(
-        {
-          id_block: targetBlock.id_block,
-          id_staff: params.staffId,
-          assignment_type: params.assignmentType ?? "SECRETARY",
-          id_role: params.roleId ?? null,
-          id_skill: params.skillId ?? null,
-          id_linked_doctor: params.linkedDoctorId ?? null,
-          id_activity: params.activityId ?? null,
-          source: "MANUAL",
-          status: "PROPOSED",
-        },
-        { onConflict: "id_block,id_staff" }
-      )
-      .select()
-      .single()
-  );
+  if (error) throw new Error(error.message);
+  return data;
 }
 
 export async function cancelAssignment(supabase: SupabaseClient, assignmentId: number) {
@@ -185,5 +155,28 @@ export async function swapAssignments(
       },
       { onConflict: "id_block,id_staff" }
     ).select().single()
+  );
+}
+
+/**
+ * Update skill (and optionally linked doctor) on an existing assignment.
+ */
+export async function updateAssignmentSkill(
+  supabase: SupabaseClient,
+  assignmentId: number,
+  skillId: number | null,
+  linkedDoctorId?: number | null,
+) {
+  return throwIfError(
+    await supabase
+      .from("assignments")
+      .update({
+        id_skill: skillId,
+        ...(linkedDoctorId !== undefined && { id_linked_doctor: linkedDoctorId }),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id_assignment", assignmentId)
+      .select()
+      .single()
   );
 }

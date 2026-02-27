@@ -7,6 +7,9 @@ import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
   Users,
+  CalendarOff,
+  Award,
+  Layers,
   Settings,
   Menu,
   X,
@@ -104,6 +107,27 @@ function SidebarContent({ onLinkClick }: { onLinkClick?: () => void }) {
                 icon={Users}
                 label="Personnel"
                 active={isActive("/staff")}
+                onClick={onLinkClick}
+              />
+              <NavLink
+                href="/absences"
+                icon={CalendarOff}
+                label="Absences"
+                active={isActive("/absences")}
+                onClick={onLinkClick}
+              />
+              <NavLink
+                href="/skills"
+                icon={Award}
+                label="Compétences"
+                active={isActive("/skills")}
+                onClick={onLinkClick}
+              />
+              <NavLink
+                href="/needs"
+                icon={Layers}
+                label="Besoins"
+                active={isActive("/needs")}
                 onClick={onLinkClick}
               />
             </div>

@@ -30,7 +30,7 @@ import {
 type StaffAssignment = Record<string, any>;
 
 interface StaffLeave {
-  id_leave: number;
+  id_absence: number;
   start_date: string;
   end_date: string;
   period: "AM" | "PM" | null;

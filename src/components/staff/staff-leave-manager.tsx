@@ -15,7 +15,7 @@ const PERIOD_OPTIONS = [
 
 
 interface LeaveEntry {
-  id_leave: number;
+  id_absence: number;
   start_date: string;
   end_date: string;
   period: "AM" | "PM" | null;
@@ -69,7 +69,7 @@ export function StaffLeaveManager({ staffId, leaves, showForm, onToggleForm }: S
   };
 
   const startEdit = (leave: LeaveEntry) => {
-    setEditingId(leave.id_leave);
+    setEditingId(leave.id_absence);
     setEditStart(leave.start_date);
     setEditEnd(leave.end_date);
     setEditPeriod(leave.period ?? "");
@@ -187,12 +187,12 @@ export function StaffLeaveManager({ staffId, leaves, showForm, onToggleForm }: S
       {activeLeaves.length > 0 && (
         <div className="space-y-2">
           {activeLeaves.map((leave) => {
-            const isEditing = editingId === leave.id_leave;
+            const isEditing = editingId === leave.id_absence;
 
             if (isEditing) {
               return (
                 <div
-                  key={leave.id_leave}
+                  key={leave.id_absence}
                   className="bg-muted/30 rounded-xl border border-primary/30 p-3 space-y-2"
                 >
                   <div className="grid grid-cols-2 gap-2">
@@ -249,7 +249,7 @@ export function StaffLeaveManager({ staffId, leaves, showForm, onToggleForm }: S
 
             return (
               <div
-                key={leave.id_leave}
+                key={leave.id_absence}
                 className="flex items-center justify-between bg-warning/5 border border-warning/20 rounded-xl px-4 py-2.5 group"
               >
                 <div>
@@ -299,7 +299,7 @@ export function StaffLeaveManager({ staffId, leaves, showForm, onToggleForm }: S
         onConfirm={() => {
           if (confirmDelete) {
             deleteLeave.mutate(
-              { staffId, leaveId: confirmDelete.id_leave },
+              { staffId, leaveId: confirmDelete.id_absence },
               { onSuccess: () => setConfirmDelete(null) }
             );
           }

@@ -97,6 +97,60 @@ export async function fetchActivityTemplates(supabase: SupabaseClient) {
   );
 }
 
+export async function createActivityTemplate(supabase: SupabaseClient, name: string) {
+  return throwIfError(
+    await supabase.from("activity_templates").insert({ name }).select().single()
+  );
+}
+
+export async function deleteActivityTemplate(supabase: SupabaseClient, id: number) {
+  return throwIfError(
+    await supabase.from("activity_templates").delete().eq("id_activity", id)
+  );
+}
+
+// ============================================================
+// Activity Requirements
+// ============================================================
+
+export async function fetchActivityRequirements(supabase: SupabaseClient) {
+  return throwIfError(
+    await supabase
+      .from("activity_requirements")
+      .select("*, activity_templates ( name ), skills ( name )")
+      .order("id_activity")
+  );
+}
+
+export async function createActivityRequirement(
+  supabase: SupabaseClient,
+  data: { id_activity: number; id_skill: number; quantity: number }
+) {
+  return throwIfError(
+    await supabase
+      .from("activity_requirements")
+      .insert(data)
+      .select("*, activity_templates ( name ), skills ( name )")
+      .single()
+  );
+}
+
+export async function updateActivityRequirement(
+  supabase: SupabaseClient,
+  id: number,
+  data: Partial<{ id_skill: number; quantity: number }>
+) {
+  return throwIfError(
+    await supabase.from("activity_requirements").update(data).eq("id_requirement", id).select().single()
+  );
+}
+
+export async function deleteActivityRequirement(supabase: SupabaseClient, id: number) {
+  return throwIfError(
+    await supabase.from("activity_requirements").delete().eq("id_requirement", id)
+  );
+}
+
 // ============================================================
 // Roles
 // ============================================================

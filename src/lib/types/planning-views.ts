@@ -1,7 +1,7 @@
 // Types partagés entre departments-table-view et collaborateurs-table-view
 
 export interface LeaveEntry {
-  id_leave: number;
+  id_absence: number;
   id_staff: number;
   start_date: string;
   end_date: string;

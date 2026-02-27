@@ -73,27 +73,29 @@ export function StaffTable() {
   return (
     <div>
       {/* Filters bar */}
-      <div className="flex flex-wrap items-center gap-4 mb-6">
+      <div className="flex flex-wrap items-center gap-3 mb-6 bg-card rounded-xl border border-border/50 shadow-subtle px-4 py-2">
         {/* Search */}
-        <div className="relative flex-1 min-w-[200px] max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        <div className="relative flex-1 min-w-[180px] max-w-sm">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/50" />
           <input
             type="text"
             placeholder="Rechercher par nom..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-slate-200 bg-white text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 hover:border-slate-300 hover:shadow-sm transition-all"
+            className="w-full pl-8 pr-3 h-8 text-sm bg-muted/50 border-0 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-muted-foreground/50"
           />
         </div>
 
+        <div className="w-px h-5 bg-border/50" />
+
         {/* Position pill tabs — Médecins+Obstétriciennes merged */}
-        <div className="flex items-center gap-1 bg-muted/50 rounded-xl p-1 border border-border/30">
+        <div className="flex gap-0.5 bg-muted/50 rounded-lg p-0.5">
           <button
             onClick={() => setPosFilter("")}
             className={cn(
-              "px-3 py-1.5 text-xs font-medium rounded-lg transition-all",
+              "px-3.5 py-1.5 text-xs font-medium rounded-md transition-all",
               posFilter === ""
-                ? "bg-card text-foreground shadow-sm ring-1 ring-border/50"
+                ? "bg-white text-foreground shadow-sm"
                 : "text-muted-foreground hover:text-foreground"
             )}
           >
@@ -109,9 +111,9 @@ export function StaffTable() {
                 key={id}
                 onClick={() => setPosFilter(posFilter === id ? "" : id)}
                 className={cn(
-                  "flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-all",
+                  "flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-medium rounded-md transition-all",
                   posFilter === id
-                    ? "bg-card text-foreground shadow-sm ring-1 ring-border/50"
+                    ? "bg-white text-foreground shadow-sm"
                     : "text-muted-foreground hover:text-foreground"
                 )}
               >
@@ -125,8 +127,10 @@ export function StaffTable() {
           })}
         </div>
 
+        <div className="w-px h-5 bg-border/50" />
+
         {/* Active pill tabs */}
-        <div className="flex items-center gap-1 bg-muted/50 rounded-xl p-1 border border-border/30">
+        <div className="flex gap-0.5 bg-muted/50 rounded-lg p-0.5">
           {([
             { value: "true", label: "Actifs" },
             { value: "false", label: "Inactifs" },
@@ -136,9 +140,9 @@ export function StaffTable() {
               key={opt.value}
               onClick={() => setActiveFilter(opt.value)}
               className={cn(
-                "px-3 py-1.5 text-xs font-medium rounded-lg transition-all",
+                "px-3.5 py-1.5 text-xs font-medium rounded-md transition-all",
                 activeFilter === opt.value
-                  ? "bg-card text-foreground shadow-sm ring-1 ring-border/50"
+                  ? "bg-white text-foreground shadow-sm"
                   : "text-muted-foreground hover:text-foreground"
               )}
             >
@@ -148,7 +152,7 @@ export function StaffTable() {
         </div>
 
         {/* Count */}
-        <span className="text-sm text-muted-foreground">
+        <span className="text-xs text-muted-foreground">
           {filtered.length} résultat{filtered.length !== 1 ? "s" : ""}
         </span>
       </div>

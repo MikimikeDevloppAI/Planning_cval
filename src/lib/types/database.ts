@@ -84,7 +84,7 @@ export interface StaffSchedule {
 }
 
 export interface StaffLeave {
-  id_leave?: number;
+  id_absence?: number;
   id_staff: number;
   start_date: string;
   end_date: string;

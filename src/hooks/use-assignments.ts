@@ -7,6 +7,7 @@ import {
   moveDoctorSchedule as moveDoctorScheduleQuery,
   cancelAssignment as cancelAssignmentQuery,
   updateAssignmentStatus as updateAssignmentStatusQuery,
+  updateAssignmentSkill as updateAssignmentSkillQuery,
   swapAssignments as swapAssignmentsQuery,
 } from "@/lib/supabase/queries";
 import type { PlanningData, PlanningAssignment } from "@/lib/types/database";
@@ -154,11 +155,9 @@ interface MoveAssignmentParams {
   targetDate: string;
   period: "AM" | "PM";
   staffId: number;
-  assignmentType: "DOCTOR" | "SECRETARY";
   roleId: number | null;
   skillId: number | null;
   linkedDoctorId?: number | null;
-  activityId?: number | null;
   // For optimistic update
   personName: string;
   idPrimaryPosition: 1 | 2 | 3;
@@ -199,11 +198,9 @@ export function useMoveAssignment() {
         targetDate: params.targetDate,
         period: params.period,
         staffId: params.staffId,
-        assignmentType: params.assignmentType,
         roleId: params.roleId,
         skillId: params.skillId,
-        linkedDoctorId: params.linkedDoctorId,
-        activityId: params.activityId,
+        linkedDoctorId: params.linkedDoctorId ?? null,
       }),
     onMutate: async (params) => {
       await queryClient.cancelQueries({ queryKey: ["planning"] });
@@ -231,12 +228,12 @@ export function useMoveAssignment() {
             id_staff: params.staffId,
             firstname: firstname ?? "",
             lastname,
-            assignment_type: params.assignmentType,
+            assignment_type: "SECRETARY",
             id_role: params.roleId,
             role_name: null,
             id_skill: params.skillId,
             skill_name: null,
-            id_activity: params.activityId ?? null,
+            id_activity: null,
             activity_name: null,
             id_linked_doctor: params.linkedDoctorId ?? null,
             source: "MANUAL",
@@ -389,6 +386,19 @@ export function useSwapAssignments() {
     onError: (_err, _params, context) => {
       if (context?.snapshots) rollbackQueries(queryClient, context.snapshots);
     },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["planning"] });
+    },
+  });
+}
+
+export function useUpdateAssignmentSkill() {
+  const queryClient = useQueryClient();
+  const supabase = createClient();
+
+  return useMutation({
+    mutationFn: (params: { assignmentId: number; skillId: number | null; linkedDoctorId?: number | null }) =>
+      updateAssignmentSkillQuery(supabase, params.assignmentId, params.skillId, params.linkedDoctorId),
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["planning"] });
     },

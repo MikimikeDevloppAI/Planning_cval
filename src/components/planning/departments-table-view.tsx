@@ -19,18 +19,17 @@ import { fr } from "date-fns/locale";
 import { UserCircle2, CalendarOff, Check, Send, XCircle, Move, ArrowLeftRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { buildInitialsMap } from "@/lib/utils/initials";
-import { ROLE_TAG } from "@/lib/constants";
+import { ROLE_TAG, VIRTUAL_SITE_SURGERY } from "@/lib/constants";
 import { weekSepStyle } from "@/lib/utils/planning-helpers";
 import type { LeaveEntry } from "@/lib/types/planning-views";
 
 import { useMoveAssignment, useMoveDoctorSchedule, useCancelAssignment, useUpdateAssignmentStatus } from "@/hooks/use-assignments";
-import { Popover } from "@/components/ui/popover";
 import { DropdownMenu } from "@/components/ui/dropdown-menu";
 import { QuickAbsenceDialog } from "@/components/dialogs/quick-absence-dialog";
+import { AssignmentDialog } from "@/components/dialogs/assignment-dialog";
 import { MoveAssignmentDialog } from "@/components/dialogs/move-assignment-dialog";
 import { SwapAssignmentDialog } from "@/components/dialogs/swap-assignment-dialog";
-import { RoleSelectionDialog } from "@/components/dialogs/role-selection-dialog";
-import { resolveRoleOptions, type RoleSelectionData } from "@/lib/utils/role-selection";
+import { SurgeryAssignmentDialog } from "@/components/dialogs/surgery-assignment-dialog";
 import type {
   PlanningSite,
   PlanningBlock,
@@ -71,7 +70,7 @@ interface DayPerson {
 }
 
 /** Drag data attached to draggable chips */
-interface ChipDragData {
+export interface ChipDragData {
   personId: number;
   personType: "DOCTOR" | "SECRETARY";
   personName: string;
@@ -87,15 +86,14 @@ interface ChipDragData {
   skillId: number | null;
 }
 
-/** Pending drop waiting for user to choose AM/PM/FULL */
-interface PendingDrop {
+/** Pending assignment dialog data */
+interface PendingAssignDialog {
   dragData: ChipDragData;
   dropData: CellDropData;
-  anchor: DOMRect | null;
 }
 
 /** Drop data attached to droppable cells */
-interface CellDropData {
+export interface CellDropData {
   deptId: number;
   deptName: string;
   date: string;
@@ -199,16 +197,26 @@ export function DepartmentsTableView({ days, sites, leaves = [] }: DepartmentsTa
     person: DayPerson; date: string; deptId: number; deptName: string;
   } | null>(null);
 
-  // Pending drop: FULL day person needs user to choose AM/PM/FULL
-  const [pendingDrop, setPendingDrop] = useState<PendingDrop | null>(null);
+  // Assignment dialog: full modal for period + role/skill selection
+  const [assignDialog, setAssignDialog] = useState<PendingAssignDialog | null>(null);
 
-  // Role selection: secretary needs to pick a role for the target block
-  const [roleSelection, setRoleSelection] = useState<{
-    assignmentId: number;
+  // Admin confirm: simple period picker for FULL-day drops on admin departments
+  const [adminConfirm, setAdminConfirm] = useState<PendingAssignDialog | null>(null);
+
+  // Surgery dialog: opened directly on drop when target is surgery
+  const [surgeryDialog, setSurgeryDialog] = useState<{
     dragData: ChipDragData;
     dropData: CellDropData;
-    period: "AM" | "PM";
-    selectionData: RoleSelectionData;
+  } | null>(null);
+
+  // Surgery view dialog: opened by clicking on a surgery cell (view/manage mode)
+  const [surgeryView, setSurgeryView] = useState<{
+    date: string;
+    deptName: string;
+    amBlocks: PlanningBlock[];
+    pmBlocks: PlanningBlock[];
+    amNeeds: StaffingNeed[];
+    pmNeeds: StaffingNeed[];
   } | null>(null);
 
   useEffect(() => {
@@ -250,7 +258,6 @@ export function DepartmentsTableView({ days, sites, leaves = [] }: DepartmentsTa
     dragData: ChipDragData,
     dropData: CellDropData,
     linkedDoctorId?: number | null,
-    activityId?: number | null,
   ) => {
     // Resolve real department ID from blocks (virtual depts like Administration use id_dept=-2000
     // but the actual work_blocks have the real id_department)
@@ -272,69 +279,38 @@ export function DepartmentsTableView({ days, sites, leaves = [] }: DepartmentsTa
       return;
     }
 
-    // Secretary → backend resolves the target block from (dept, date, period)
+    // Secretary → atomic RPC: cancel old + find block + upsert new
     moveAssignment.mutate({
       oldAssignmentId: assignmentId,
       targetDeptId: realDeptId,
       targetDate: dropData.date,
       period,
       staffId: dragData.personId,
-      assignmentType: dragData.personType,
       roleId: dragData.roleId,
       skillId: dragData.skillId,
       linkedDoctorId: linkedDoctorId ?? null,
-      activityId: activityId ?? null,
       personName: dragData.personName,
       idPrimaryPosition: dragData.idPrimaryPosition,
     });
   };
 
-  /** Check if role selection is needed before executing a secretary move */
-  const executeWithRoleCheck = (
-    assignmentId: number,
-    period: "AM" | "PM",
+  /** Execute a confirmed drop from the unified popover */
+  const executeConfirmedDrop = (
     dragData: ChipDragData,
     dropData: CellDropData,
+    period: "AM" | "PM",
+    assignmentId: number,
+    roleId: number | null,
+    skillId: number | null,
+    linkedDoctorId: number | null,
   ) => {
-    if (dragData.personType !== "SECRETARY") {
-      executeMoveOne(assignmentId, period, dragData, dropData);
-      return;
-    }
-    const periodNeeds = period === "PM" ? dropData.pmNeeds : dropData.amNeeds;
-    const periodBlocks = period === "PM" ? dropData.pmBlocks : dropData.amBlocks;
-    const selData = resolveRoleOptions(periodBlocks, periodNeeds);
-
-    if (selData.autoSelect !== null) {
-      executeMoveOne(
-        assignmentId, period,
-        { ...dragData, roleId: selData.autoSelect.roleId ?? dragData.roleId },
-        dropData,
-        selData.autoSelect.linkedDoctorId,
-        selData.autoSelect.activityId,
-      );
-    } else {
-      setRoleSelection({ assignmentId, dragData, dropData, period, selectionData: selData });
-    }
-  };
-
-  /** Handle user choice from the period popover for FULL day drops */
-  const handlePeriodChoice = (choice: "AM" | "PM" | "FULL") => {
-    if (!pendingDrop) return;
-    const { dragData, dropData } = pendingDrop;
-    setPendingDrop(null);
-
-    if (choice === "FULL") {
-      executeWithRoleCheck(dragData.assignmentId, "AM", dragData, dropData);
-      if (dragData.pmAssignmentId) {
-        executeWithRoleCheck(dragData.pmAssignmentId, "PM", dragData, dropData);
-      }
-    } else if (choice === "AM") {
-      executeWithRoleCheck(dragData.assignmentId, "AM", dragData, dropData);
-    } else {
-      if (dragData.pmAssignmentId) {
-        executeWithRoleCheck(dragData.pmAssignmentId, "PM", dragData, dropData);
-      }
-    }
+    executeMoveOne(
+      assignmentId,
+      period,
+      { ...dragData, roleId, skillId },
+      dropData,
+      linkedDoctorId,
+    );
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -356,10 +332,35 @@ export function DepartmentsTableView({ days, sites, leaves = [] }: DepartmentsTa
     const allBlocks = [...dropData.amBlocks, ...dropData.pmBlocks];
     if (dragData.personType === "DOCTOR" && allBlocks.every((b) => b.block_type === "ADMIN")) return;
 
-    // Always show confirmation popover
-    const overEl = document.getElementById(over.id as string);
-    const anchor = overEl?.getBoundingClientRect() ?? null;
-    setPendingDrop({ dragData, dropData, anchor });
+    // Surgery target → open full surgery dialog directly
+    const hasSurgery = allBlocks.some((b) => b.block_type === "SURGERY");
+    if (hasSurgery && dragData.personType === "SECRETARY") {
+      setSurgeryDialog({ dragData, dropData });
+      return;
+    }
+
+    // Admin target → no role/skill dialog needed
+    const isAdmin = allBlocks.every((b) => b.block_type === "ADMIN");
+    if (isAdmin) {
+      const hasAm = dropData.amBlocks.length > 0;
+      const hasPm = dropData.pmBlocks.length > 0;
+
+      if (dragData.period === "FULL" && dragData.pmAssignmentId && hasAm && hasPm) {
+        // FULL day person + target has both periods → ask which period
+        setAdminConfirm({ dragData, dropData });
+      } else {
+        // Single period or target has only one period → execute immediately
+        const period = !hasAm ? "PM" as const : !hasPm ? "AM" as const : dragData.period === "PM" ? "PM" as const : "AM" as const;
+        const assignmentId = period === "PM" && dragData.pmAssignmentId
+          ? dragData.pmAssignmentId
+          : dragData.assignmentId;
+        executeConfirmedDrop(dragData, dropData, period, assignmentId, 1, null, null);
+      }
+      return;
+    }
+
+    // Otherwise open assignment dialog
+    setAssignDialog({ dragData, dropData });
   };
 
   // Build leave index: date → list of { staff info, period }
@@ -565,7 +566,10 @@ export function DepartmentsTableView({ days, sites, leaves = [] }: DepartmentsTa
           <tbody>
             {(() => {
               let globalRowIdx = 0;
-              return sites.map((site) => (
+              return sites.map((site) => {
+                const isSurgerySite = site.id_site === VIRTUAL_SITE_SURGERY;
+
+                return (
                 <Fragment key={`site-${site.id_site}`}>
                   {site.departments.map((dept) => {
                     const isEvenRow = globalRowIdx % 2 === 0;
@@ -626,6 +630,14 @@ export function DepartmentsTableView({ days, sites, leaves = [] }: DepartmentsTa
                                   onChipClick={(person, anchor) =>
                                     setChipMenu({ person, date: day.date, deptId: dept.id_department, deptName: dept.name, anchor })
                                   }
+                                  onCellAreaClick={isSurgerySite ? () => setSurgeryView({
+                                    date: day.date,
+                                    deptName: dept.name,
+                                    amBlocks: day.am.blocks,
+                                    pmBlocks: day.pm.blocks,
+                                    amNeeds: day.am.needs,
+                                    pmNeeds: day.pm.needs,
+                                  }) : undefined}
                                 />
                               </DroppableCell>
                             </td>
@@ -635,7 +647,8 @@ export function DepartmentsTableView({ days, sites, leaves = [] }: DepartmentsTa
                     );
                   })}
                 </Fragment>
-              ));
+                );
+              })
             })()}
 
             {/* Absences row */}
@@ -699,76 +712,101 @@ export function DepartmentsTableView({ days, sites, leaves = [] }: DepartmentsTa
         onClose={() => setChipMenu(null)}
       />
 
-      {/* Drop confirmation popover */}
-      <Popover
-        anchor={pendingDrop?.anchor ?? null}
-        open={pendingDrop !== null}
-        onClose={() => setPendingDrop(null)}
-        align="center"
-      >
-        {pendingDrop && (
-          <div className="py-2.5 px-3 min-w-[180px]">
-            <p className="text-[13px] font-semibold text-slate-700 pb-0.5">
-              {pendingDrop.dragData.personName}
-            </p>
-            <p className="text-[11px] text-slate-400 pb-2.5">
-              {pendingDrop.dragData.deptName} → {pendingDrop.dropData.deptName}
-            </p>
+      {/* Assignment dialog — full modal for period + role/skill selection */}
+      {assignDialog && (
+        <AssignmentDialog
+          open
+          onClose={() => setAssignDialog(null)}
+          dragData={assignDialog.dragData}
+          dropData={assignDialog.dropData}
+          onConfirm={(period, assignmentId, roleId, skillId, linkedDoctorId) => {
+            setAssignDialog(null);
+            executeConfirmedDrop(assignDialog.dragData, assignDialog.dropData, period, assignmentId, roleId, skillId, linkedDoctorId);
+          }}
+          onConfirmFull={(amRoleId, amSkillId, amLinkedDoc, pmRoleId, pmSkillId, pmLinkedDoc) => {
+            setAssignDialog(null);
+            const { dragData, dropData } = assignDialog;
+            executeConfirmedDrop(dragData, dropData, "AM", dragData.assignmentId, amRoleId, amSkillId, amLinkedDoc);
+            if (dragData.pmAssignmentId) {
+              executeConfirmedDrop(dragData, dropData, "PM", dragData.pmAssignmentId, pmRoleId, pmSkillId, pmLinkedDoc);
+            }
+          }}
+          isPending={moveAssignment.isPending}
+        />
+      )}
 
-            {pendingDrop.dragData.period === "FULL" && pendingDrop.dragData.pmAssignmentId ? (
-              <div className="space-y-0.5">
-                <button
-                  onClick={() => handlePeriodChoice("FULL")}
-                  className="flex items-center gap-2 w-full text-left px-2.5 py-2 text-[13px] text-slate-700 hover:bg-slate-50 rounded-lg transition-colors"
-                >
-                  Journée entière
-                </button>
-                <button
-                  onClick={() => handlePeriodChoice("AM")}
-                  className="flex items-center gap-2 w-full text-left px-2.5 py-2 text-[13px] text-slate-700 hover:bg-slate-50 rounded-lg transition-colors"
-                >
-                  <span className="w-2 h-2 rounded-full bg-blue-500" />
-                  Matin seulement
-                </button>
-                <button
-                  onClick={() => handlePeriodChoice("PM")}
-                  className="flex items-center gap-2 w-full text-left px-2.5 py-2 text-[13px] text-slate-700 hover:bg-slate-50 rounded-lg transition-colors"
-                >
-                  <span className="w-2 h-2 rounded-full bg-amber-400" />
-                  Après-midi seulement
-                </button>
-                <div className="pt-1 border-t border-slate-100 mt-1">
-                  <button
-                    onClick={() => setPendingDrop(null)}
-                    className="w-full text-center px-2.5 py-1.5 text-[12px] text-slate-400 hover:text-slate-600 transition-colors"
-                  >
-                    Annuler
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="flex gap-2">
-                <button
-                  onClick={() => {
-                    const period = pendingDrop.dragData.period === "PM" ? "PM" as const : "AM" as const;
-                    executeWithRoleCheck(pendingDrop.dragData.assignmentId, period, pendingDrop.dragData, pendingDrop.dropData);
-                    setPendingDrop(null);
-                  }}
-                  className="flex-1 px-3 py-1.5 text-[13px] font-medium text-white bg-primary hover:bg-primary/90 rounded-lg transition-colors"
-                >
-                  Confirmer
-                </button>
-                <button
-                  onClick={() => setPendingDrop(null)}
-                  className="flex-1 px-3 py-1.5 text-[13px] font-medium text-slate-500 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
-                >
-                  Annuler
-                </button>
-              </div>
-            )}
+      {/* Admin period picker — simple confirm for FULL-day drops on admin */}
+      {adminConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black/30 backdrop-blur-[2px] animate-fade-in-up"
+            style={{ animationDuration: "150ms" }}
+            onClick={() => setAdminConfirm(null)}
+          />
+          <div
+            className="relative bg-card rounded-2xl shadow-xl border border-border/40 w-full max-w-xs mx-4 animate-fade-in-up overflow-hidden"
+            style={{ animationDuration: "200ms" }}
+          >
+            <div className="p-5">
+              <h3 className="text-sm font-semibold text-foreground">
+                {adminConfirm.dragData.personName}
+              </h3>
+              <p className="text-xs text-muted-foreground mt-1">
+                {adminConfirm.dragData.deptName} → {adminConfirm.dropData.deptName}
+              </p>
+              {(() => {
+                const hasAm = adminConfirm.dropData.amBlocks.length > 0;
+                const hasPm = adminConfirm.dropData.pmBlocks.length > 0;
+                const canFull = hasAm && hasPm;
+                const periods = (["AM", "PM", "FULL"] as const).filter((p) =>
+                  p === "AM" ? hasAm : p === "PM" ? hasPm : canFull
+                );
+                return (
+                  <>
+                    <p className="text-xs text-muted-foreground mt-2">Quelle période ?</p>
+                    <div className="flex gap-2 mt-3">
+                      {periods.map((p) => {
+                        const label = p === "AM" ? "Matin" : p === "PM" ? "Après-midi" : "Journée";
+                        return (
+                          <button
+                            key={p}
+                            onClick={() => {
+                              const { dragData, dropData } = adminConfirm;
+                              setAdminConfirm(null);
+                              if (p === "FULL") {
+                                executeConfirmedDrop(dragData, dropData, "AM", dragData.assignmentId, 1, null, null);
+                                if (dragData.pmAssignmentId) {
+                                  executeConfirmedDrop(dragData, dropData, "PM", dragData.pmAssignmentId, 1, null, null);
+                                }
+                              } else {
+                                const assignmentId = p === "PM" && dragData.pmAssignmentId
+                                  ? dragData.pmAssignmentId
+                                  : dragData.assignmentId;
+                                executeConfirmedDrop(dragData, dropData, p, assignmentId, 1, null, null);
+                              }
+                            }}
+                            className="flex-1 px-3 py-2 text-sm font-medium text-primary-foreground bg-primary hover:bg-primary/90 rounded-xl transition-colors"
+                          >
+                            {label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+            <div className="flex items-center justify-end px-5 py-3 border-t border-border/30 bg-muted/20">
+              <button
+                onClick={() => setAdminConfirm(null)}
+                className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted rounded-xl transition-colors"
+              >
+                Annuler
+              </button>
+            </div>
           </div>
-        )}
-      </Popover>
+        </div>
+      )}
 
       {/* Action dialogs */}
       {quickAbsence && (
@@ -801,28 +839,39 @@ export function DepartmentsTableView({ days, sites, leaves = [] }: DepartmentsTa
           sites={sites}
         />
       )}
-      {roleSelection && (
-        <RoleSelectionDialog
+      {surgeryDialog && (
+        <SurgeryAssignmentDialog
           open
-          onClose={() => setRoleSelection(null)}
-          onConfirm={(selection) => {
-            const { assignmentId, dragData, dropData, period } = roleSelection;
-            setRoleSelection(null);
-            executeMoveOne(
-              assignmentId,
-              period,
-              { ...dragData, roleId: selection.roleId ?? dragData.roleId },
-              dropData,
-              selection.linkedDoctorId,
-              selection.activityId,
-            );
+          onClose={() => setSurgeryDialog(null)}
+          onConfirm={(period, selection) => {
+            const { dragData, dropData } = surgeryDialog;
+            const assignmentId = period === "PM" && dragData.pmAssignmentId
+              ? dragData.pmAssignmentId
+              : dragData.assignmentId;
+            setSurgeryDialog(null);
+            executeConfirmedDrop(dragData, dropData, period, assignmentId, selection.roleId, selection.skillId, selection.linkedDoctorId);
           }}
-          personName={roleSelection.dragData.personName}
-          sourceDeptName={roleSelection.dragData.deptName}
-          targetDeptName={roleSelection.dropData.deptName}
-          selectionData={roleSelection.selectionData}
-          currentRoleId={roleSelection.dragData.roleId}
+          personName={surgeryDialog.dragData.personName}
+          personPeriod={surgeryDialog.dragData.period}
+          sourceDeptName={surgeryDialog.dragData.deptName}
+          targetDeptName={surgeryDialog.dropData.deptName}
+          amBlocks={surgeryDialog.dropData.amBlocks}
+          amNeeds={surgeryDialog.dropData.amNeeds}
+          pmBlocks={surgeryDialog.dropData.pmBlocks}
+          pmNeeds={surgeryDialog.dropData.pmNeeds}
           isPending={moveAssignment.isPending}
+        />
+      )}
+      {surgeryView && (
+        <SurgeryAssignmentDialog
+          open
+          onClose={() => setSurgeryView(null)}
+          personName={null}
+          targetDeptName={surgeryView.deptName}
+          amBlocks={surgeryView.amBlocks}
+          amNeeds={surgeryView.amNeeds}
+          pmBlocks={surgeryView.pmBlocks}
+          pmNeeds={surgeryView.pmNeeds}
         />
       )}
     </DndContext>
@@ -934,6 +983,7 @@ function PersonChip({
       ref={setNodeRef}
       {...listeners}
       {...attributes}
+      data-chip
       onClick={handleClick}
       className={cn(
         "relative inline-flex items-center justify-center gap-0.5 w-[38px] h-7 rounded-lg overflow-hidden",
@@ -1031,6 +1081,7 @@ function DayCard({
   deptId,
   deptName,
   onChipClick,
+  onCellAreaClick,
 }: {
   people: DayPerson[];
   needs?: StaffingNeed[];
@@ -1039,6 +1090,7 @@ function DayCard({
   deptId: number;
   deptName: string;
   onChipClick?: (person: DayPerson, anchor: DOMRect) => void;
+  onCellAreaClick?: () => void;
 }) {
   const totalGap = needs.reduce((sum, n) => sum + Math.max(0, n.gap), 0);
 
@@ -1061,8 +1113,19 @@ function DayCard({
     onChipClick?.(person, rect);
   };
 
+  const handleAreaClick = onCellAreaClick
+    ? (e: React.MouseEvent) => {
+        // Don't intercept clicks on chips (which have data-chip attribute)
+        if ((e.target as HTMLElement).closest("[data-chip]")) return;
+        onCellAreaClick();
+      }
+    : undefined;
+
   return (
-    <div className="relative group/card">
+    <div
+      className={cn("relative group/card", onCellAreaClick && "cursor-pointer")}
+      onClick={handleAreaClick}
+    >
       {totalGap > 0 && (
         <span
           className="absolute -top-1 -right-0.5 z-10 w-2.5 h-2.5 rounded-full bg-red-500 ring-2 ring-white"
