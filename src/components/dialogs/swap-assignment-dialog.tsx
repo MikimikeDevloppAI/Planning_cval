@@ -17,6 +17,7 @@ interface DayPersonLike {
   period: "AM" | "PM" | "FULL";
   roleId: number | null;
   skillId: number | null;
+  activityId?: number | null;
   id_assignment: number;
   id_block: number;
 }
@@ -32,6 +33,7 @@ interface Candidate {
   id_block: number;
   roleId: number | null;
   skillId: number | null;
+  activityId: number | null;
 }
 
 interface SwapAssignmentDialogProps {
@@ -85,6 +87,7 @@ export function SwapAssignmentDialog({
                   id_block: block.id_block,
                   roleId: a.id_role,
                   skillId: a.id_skill,
+                  activityId: a.id_activity,
                 });
               }
             }
@@ -120,6 +123,7 @@ export function SwapAssignmentDialog({
           type: personA.type,
           roleId: personA.roleId,
           skillId: personA.skillId,
+          activityId: personA.activityId ?? null,
         },
         b: {
           assignmentId: selectedCandidate.id_assignment,
@@ -128,6 +132,7 @@ export function SwapAssignmentDialog({
           type: selectedCandidate.type,
           roleId: selectedCandidate.roleId,
           skillId: selectedCandidate.skillId,
+          activityId: selectedCandidate.activityId,
         },
       },
       {
@@ -221,7 +226,7 @@ export function SwapAssignmentDialog({
           )}
 
           {/* Actions */}
-          <div className="flex gap-2 justify-end pt-1 shrink-0">
+          <div className="flex gap-2 justify-end pt-4 shrink-0">
             <button
               onClick={onClose}
               className="px-4 py-2 text-sm rounded-lg border border-border/50 text-foreground hover:bg-muted/50 transition-colors"

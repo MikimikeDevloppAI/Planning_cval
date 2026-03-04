@@ -10,6 +10,7 @@ import {
   CalendarOff,
   Award,
   Layers,
+  Building2,
   Settings,
   Menu,
   X,
@@ -128,6 +129,13 @@ function SidebarContent({ onLinkClick }: { onLinkClick?: () => void }) {
                 icon={Layers}
                 label="Besoins"
                 active={isActive("/needs")}
+                onClick={onLinkClick}
+              />
+              <NavLink
+                href="/sites"
+                icon={Building2}
+                label="Sites & Départements"
+                active={isActive("/sites")}
                 onClick={onLinkClick}
               />
             </div>

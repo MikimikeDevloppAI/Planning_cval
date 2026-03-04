@@ -42,6 +42,30 @@ interface RoleOption {
   name: string;
 }
 
+const PREF_GROUPS = [
+  {
+    key: "INTERDIT" as PreferenceLevel,
+    label: "Interdit",
+    icon: <Ban className="w-3.5 h-3.5" />,
+    accent: "#dc2626",
+    bgClass: "bg-destructive/5 border-destructive/20",
+  },
+  {
+    key: "EVITER" as PreferenceLevel,
+    label: "À éviter",
+    icon: <AlertTriangle className="w-3.5 h-3.5" />,
+    accent: "#d97706",
+    bgClass: "bg-warning/5 border-warning/20",
+  },
+  {
+    key: "PREFERE" as PreferenceLevel,
+    label: "Préféré",
+    icon: <Heart className="w-3.5 h-3.5" />,
+    accent: "#16a34a",
+    bgClass: "bg-success/5 border-success/20",
+  },
+] as const;
+
 export function StaffPrefsManager({ staffId, preferences }: StaffPrefsManagerProps) {
   const addPref = useAddPreference();
   const removePref = useRemovePreference();
@@ -107,28 +131,6 @@ export function StaffPrefsManager({ staffId, preferences }: StaffPrefsManagerPro
     );
   };
 
-  const prefIcon = (level: PreferenceLevel) => {
-    switch (level) {
-      case "INTERDIT":
-        return <Ban className="w-3.5 h-3.5 text-destructive" />;
-      case "EVITER":
-        return <AlertTriangle className="w-3.5 h-3.5 text-warning" />;
-      case "PREFERE":
-        return <Heart className="w-3.5 h-3.5 text-success" />;
-    }
-  };
-
-  const prefColor = (level: PreferenceLevel) => {
-    switch (level) {
-      case "INTERDIT":
-        return "bg-destructive/5 border-destructive/20";
-      case "EVITER":
-        return "bg-warning/5 border-warning/20";
-      case "PREFERE":
-        return "bg-success/5 border-success/20";
-    }
-  };
-
   const getTargetLabel = (pref: PrefEntry) => {
     switch (pref.target_type) {
       case "SITE":
@@ -143,6 +145,44 @@ export function StaffPrefsManager({ staffId, preferences }: StaffPrefsManagerPro
         return "—";
     }
   };
+
+  // Group preferences by level
+  const groupedPrefs = PREF_GROUPS.map((group) => ({
+    ...group,
+    items: preferences.filter((p) => p.preference === group.key),
+  })).filter((g) => g.items.length > 0);
+
+  const renderPrefRow = (pref: PrefEntry) => (
+    <div
+      key={pref.id_preference}
+      className="flex items-center justify-between rounded-xl px-3.5 py-2 hover:bg-muted/30 transition-colors group"
+    >
+      <div className="min-w-0 flex-1">
+        <div className="text-sm font-medium text-foreground truncate">
+          <span className="text-muted-foreground text-xs mr-1">
+            {TARGET_TYPE_LABELS[pref.target_type]}:
+          </span>
+          {getTargetLabel(pref)}
+        </div>
+        {(pref.day_of_week || pref.reason) && (
+          <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
+            {pref.day_of_week && (
+              <span>{JOUR_LABELS[parseInt(pref.day_of_week)] ?? pref.day_of_week}</span>
+            )}
+            {pref.reason && (
+              <span className="italic truncate max-w-[200px]">— {pref.reason}</span>
+            )}
+          </div>
+        )}
+      </div>
+      <button
+        onClick={() => setConfirmDelete(pref)}
+        className="text-muted-foreground/40 hover:text-destructive p-1 rounded-lg hover:bg-destructive/5 transition-colors opacity-0 group-hover:opacity-100 shrink-0"
+      >
+        <Trash2 className="w-3.5 h-3.5" />
+      </button>
+    </div>
+  );
 
   return (
     <div className="space-y-4">
@@ -162,50 +202,35 @@ export function StaffPrefsManager({ staffId, preferences }: StaffPrefsManagerPro
         <p className="text-sm text-muted-foreground italic">Aucune préférence définie</p>
       )}
 
-      {/* Existing preferences */}
-      <div className="space-y-2">
-        {preferences.map((pref) => (
-          <div
-            key={pref.id_preference}
-            className={`flex items-center justify-between rounded-xl border px-4 py-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.03)] ${prefColor(
-              pref.preference
-            )}`}
-          >
-            <div className="flex items-center gap-3">
-              {prefIcon(pref.preference)}
-              <div>
-                <div className="text-sm font-medium text-foreground">
-                  <span className="text-muted-foreground text-xs mr-1">
-                    {TARGET_TYPE_LABELS[pref.target_type]}:
-                  </span>
-                  {getTargetLabel(pref)}
+      {/* Grouped preferences */}
+      {groupedPrefs.length > 0 && (
+        <div className="space-y-3">
+          {groupedPrefs.map((group) => (
+            <div key={group.key}>
+              <div className="flex items-center gap-2 mb-2 px-1">
+                <div
+                  className="w-6 h-6 rounded-lg flex items-center justify-center"
+                  style={{ backgroundColor: `${group.accent}15`, color: group.accent }}
+                >
+                  {group.icon}
                 </div>
-                <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
-                  <span className="font-medium">
-                    {PREFERENCE_LABELS[pref.preference]}
-                  </span>
-                  {pref.day_of_week && (
-                    <span>
-                      {JOUR_LABELS[parseInt(pref.day_of_week)] ?? pref.day_of_week}
-                    </span>
-                  )}
-                  {pref.reason && (
-                    <span className="italic truncate max-w-[200px]">
-                      — {pref.reason}
-                    </span>
-                  )}
-                </div>
+                <span className="text-xs font-semibold text-foreground">
+                  {group.label}
+                </span>
+                <span
+                  className="text-[10px] font-bold rounded-full px-1.5 py-0.5 ml-auto"
+                  style={{ backgroundColor: `${group.accent}12`, color: group.accent }}
+                >
+                  {group.items.length}
+                </span>
+              </div>
+              <div className="bg-muted/20 rounded-xl border border-border/30 divide-y divide-border/20">
+                {group.items.map(renderPrefRow)}
               </div>
             </div>
-            <button
-              onClick={() => setConfirmDelete(pref)}
-              className="text-destructive/50 hover:text-destructive p-1 rounded-lg hover:bg-destructive/5 transition-colors"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
       <ConfirmDialog
         open={!!confirmDelete}

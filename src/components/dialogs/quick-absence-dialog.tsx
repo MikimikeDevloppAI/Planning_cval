@@ -30,7 +30,7 @@ export function QuickAbsenceDialog({
   const [result, setResult] = useState<string | null>(null);
   const addLeave = useAddLeave();
 
-  if (!open) return null;
+  if (!open || !date) return null;
 
   const handleConfirm = () => {
     setResult(null);
@@ -122,7 +122,7 @@ export function QuickAbsenceDialog({
 
           {/* Actions */}
           {!result && (
-            <div className="flex gap-2 justify-end pt-1">
+            <div className="flex gap-2 justify-end pt-4">
               <button
                 onClick={onClose}
                 className="px-4 py-2 text-sm rounded-lg border border-border/50 text-foreground hover:bg-muted/50 transition-colors"

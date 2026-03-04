@@ -23,13 +23,14 @@ import { ROLE_TAG, VIRTUAL_SITE_SURGERY } from "@/lib/constants";
 import { weekSepStyle } from "@/lib/utils/planning-helpers";
 import type { LeaveEntry } from "@/lib/types/planning-views";
 
-import { useMoveAssignment, useMoveDoctorSchedule, useCancelAssignment, useUpdateAssignmentStatus } from "@/hooks/use-assignments";
+import { useMoveAssignment, useMoveDoctorSchedule, useUpdateAssignmentStatus } from "@/hooks/use-assignments";
 import { DropdownMenu } from "@/components/ui/dropdown-menu";
 import { QuickAbsenceDialog } from "@/components/dialogs/quick-absence-dialog";
 import { AssignmentDialog } from "@/components/dialogs/assignment-dialog";
 import { MoveAssignmentDialog } from "@/components/dialogs/move-assignment-dialog";
 import { SwapAssignmentDialog } from "@/components/dialogs/swap-assignment-dialog";
 import { SurgeryAssignmentDialog } from "@/components/dialogs/surgery-assignment-dialog";
+import { CancelAssignmentDialog } from "@/components/dialogs/cancel-assignment-dialog";
 import type {
   PlanningSite,
   PlanningBlock,
@@ -96,6 +97,7 @@ interface PendingAssignDialog {
 export interface CellDropData {
   deptId: number;
   deptName: string;
+  roomId: number | null;
   date: string;
   amBlocks: PlanningBlock[];
   pmBlocks: PlanningBlock[];
@@ -163,7 +165,6 @@ export function DepartmentsTableView({ days, sites, leaves = [] }: DepartmentsTa
 
   const moveAssignment = useMoveAssignment();
   const moveDoctorSchedule = useMoveDoctorSchedule();
-  const cancelAssignment = useCancelAssignment();
   const updateStatus = useUpdateAssignmentStatus();
 
   const sensors = useSensors(
@@ -195,6 +196,11 @@ export function DepartmentsTableView({ days, sites, leaves = [] }: DepartmentsTa
   } | null>(null);
   const [swapDialog, setSwapDialog] = useState<{
     person: DayPerson; date: string; deptId: number; deptName: string;
+  } | null>(null);
+
+  // Cancel assignment dialog
+  const [cancelDialog, setCancelDialog] = useState<{
+    person: DayPerson; date: string;
   } | null>(null);
 
   // Assignment dialog: full modal for period + role/skill selection
@@ -270,6 +276,7 @@ export function DepartmentsTableView({ days, sites, leaves = [] }: DepartmentsTa
         staffId: dragData.personId,
         sourceAssignmentId: assignmentId,
         targetDeptId: realDeptId,
+        targetRoomId: dropData.roomId,
         targetDate: dropData.date,
         period,
         activityId: dragData.activityId,
@@ -283,6 +290,7 @@ export function DepartmentsTableView({ days, sites, leaves = [] }: DepartmentsTa
     moveAssignment.mutate({
       oldAssignmentId: assignmentId,
       targetDeptId: realDeptId,
+      targetRoomId: dropData.roomId,
       targetDate: dropData.date,
       period,
       staffId: dragData.personId,
@@ -490,8 +498,7 @@ export function DepartmentsTableView({ days, sites, leaves = [] }: DepartmentsTa
         label: "Annuler assignation",
         icon: XCircle,
         variant: "danger" as const,
-        onClick: () =>
-          cancelAssignment.mutate({ assignmentId: person.id_assignment }),
+        onClick: () => setCancelDialog({ person, date }),
       });
     }
 
@@ -500,7 +507,7 @@ export function DepartmentsTableView({ days, sites, leaves = [] }: DepartmentsTa
       sections.push({ items: dangerItems });
     }
     return sections;
-  }, [chipMenu, router, updateStatus, cancelAssignment]);
+  }, [chipMenu, router, updateStatus]);
 
   if (sites.length === 0) {
     return (
@@ -614,6 +621,7 @@ export function DepartmentsTableView({ days, sites, leaves = [] }: DepartmentsTa
                               <DroppableCell
                                 deptId={dept.id_department}
                                 deptName={dept.name}
+                                roomId={day.am.blocks[0]?.id_room ?? day.pm.blocks[0]?.id_room ?? null}
                                 date={day.date}
                                 amBlocks={day.am.blocks}
                                 pmBlocks={day.pm.blocks}
@@ -785,7 +793,7 @@ export function DepartmentsTableView({ days, sites, leaves = [] }: DepartmentsTa
                                 executeConfirmedDrop(dragData, dropData, p, assignmentId, 1, null, null);
                               }
                             }}
-                            className="flex-1 px-3 py-2 text-sm font-medium text-primary-foreground bg-primary hover:bg-primary/90 rounded-xl transition-colors"
+                            className="flex-1 px-3 py-2 text-sm font-medium text-primary-foreground bg-primary hover:bg-primary/90 rounded-lg transition-colors"
                           >
                             {label}
                           </button>
@@ -799,7 +807,7 @@ export function DepartmentsTableView({ days, sites, leaves = [] }: DepartmentsTa
             <div className="flex items-center justify-end px-5 py-3 border-t border-border/30 bg-muted/20">
               <button
                 onClick={() => setAdminConfirm(null)}
-                className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted rounded-xl transition-colors"
+                className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors"
               >
                 Annuler
               </button>
@@ -862,6 +870,19 @@ export function DepartmentsTableView({ days, sites, leaves = [] }: DepartmentsTa
           isPending={moveAssignment.isPending}
         />
       )}
+      {cancelDialog && (
+        <CancelAssignmentDialog
+          open
+          onClose={() => setCancelDialog(null)}
+          staffName={`${cancelDialog.person.firstname} ${cancelDialog.person.lastname}`}
+          staffType={cancelDialog.person.type}
+          assignmentId={cancelDialog.person.id_assignment}
+          staffId={cancelDialog.person.id_staff}
+          date={cancelDialog.date}
+          pmAssignmentId={cancelDialog.person.pm_id_assignment}
+          period={cancelDialog.person.period === "FULL" ? "FULL" : cancelDialog.person.period}
+        />
+      )}
       {surgeryView && (
         <SurgeryAssignmentDialog
           open
@@ -884,6 +905,7 @@ export function DepartmentsTableView({ days, sites, leaves = [] }: DepartmentsTa
 function DroppableCell({
   deptId,
   deptName,
+  roomId,
   date,
   amBlocks,
   pmBlocks,
@@ -893,6 +915,7 @@ function DroppableCell({
 }: {
   deptId: number;
   deptName: string;
+  roomId: number | null;
   date: string;
   amBlocks: PlanningBlock[];
   pmBlocks: PlanningBlock[];
@@ -900,10 +923,10 @@ function DroppableCell({
   pmNeeds: StaffingNeed[];
   children: React.ReactNode;
 }) {
-  const cellId = `cell-${deptId}-${date}`;
+  const cellId = `cell-${deptId}-${date}${roomId ? `-r${roomId}` : ""}`;
   const { setNodeRef, isOver } = useDroppable({
     id: cellId,
-    data: { deptId, deptName, date, amBlocks, pmBlocks, amNeeds, pmNeeds } satisfies CellDropData,
+    data: { deptId, deptName, roomId, date, amBlocks, pmBlocks, amNeeds, pmNeeds } satisfies CellDropData,
   });
 
   return (

@@ -20,12 +20,15 @@ import {
   Filter,
   Search,
   X,
+  PlusCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TabButton } from "@/components/ui/primary-button";
 import { CustomSelect } from "@/components/ui/custom-select";
 import { DepartmentsTableView } from "@/components/planning/departments-table-view";
 import { CollaborateursTableView } from "@/components/planning/collaborateurs-table-view";
+import { AddAssignmentDialog } from "@/components/dialogs/add-assignment-dialog";
+import { fetchStaffList } from "@/lib/supabase/queries";
 import type { PlanningSite } from "@/lib/types/database";
 
 interface MonthPlanningData {
@@ -52,6 +55,7 @@ export default function PlanningPage() {
   const openSolver = useAppStore((s) => s.openSolverDialog);
 
   const [actionsOpen, setActionsOpen] = useState(false);
+  const [showAddAssignment, setShowAddAssignment] = useState(false);
   const [selectedSiteId, setSelectedSiteId] = useState<number | null>(null);
   const [selectedDeptName, setSelectedDeptName] = useState<string | null>(null);
   const [searchText, setSearchText] = useState("");
@@ -63,6 +67,23 @@ export default function PlanningPage() {
     queryKey: ["planning", "month", monthStr],
     queryFn: () => fetchMonthPlanning(supabase, monthStr) as Promise<MonthPlanningData>,
   });
+
+  // Staff list for the add-assignment dialog (lazy loaded)
+  const { data: staffListRaw } = useQuery({
+    queryKey: ["staff"],
+    queryFn: () => fetchStaffList(supabase, { active: "true" }),
+    enabled: showAddAssignment,
+  });
+  const staffList = useMemo(
+    () =>
+      (staffListRaw ?? []).map((s: Record<string, unknown>) => ({
+        id_staff: s.id_staff as number,
+        firstname: s.firstname as string,
+        lastname: s.lastname as string,
+        id_primary_position: s.id_primary_position as number,
+      })),
+    [staffListRaw]
+  );
 
   // Extend range to complete work-weeks matching fetchMonthPlanning
   const ms = startOfMonth(currentMonth);
@@ -256,6 +277,16 @@ export default function PlanningPage() {
                     <UserX className="w-4 h-4 text-warning" />
                     Déclarer une absence
                   </button>
+                  <button
+                    onClick={() => {
+                      setActionsOpen(false);
+                      setShowAddAssignment(true);
+                    }}
+                    className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-foreground hover:bg-muted transition-colors"
+                  >
+                    <PlusCircle className="w-4 h-4 text-primary" />
+                    Ajouter une assignation
+                  </button>
                 </div>
               </>
             )}
@@ -363,6 +394,14 @@ export default function PlanningPage() {
           </div>
         ) : null}
       </div>
+
+      {showAddAssignment && (
+        <AddAssignmentDialog
+          open
+          onClose={() => setShowAddAssignment(false)}
+          staffList={staffList}
+        />
+      )}
     </div>
   );
 }

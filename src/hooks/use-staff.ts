@@ -311,6 +311,7 @@ export function useRemoveSchedule() {
     },
     onSuccess: (_, vars) => {
       queryClient.invalidateQueries({ queryKey: ["staff", vars.staffId] });
+      queryClient.invalidateQueries({ queryKey: ["planning"] });
     },
   });
 }

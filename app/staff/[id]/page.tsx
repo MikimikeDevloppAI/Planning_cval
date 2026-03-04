@@ -11,6 +11,7 @@ import { StaffPrefsManager } from "@/components/staff/staff-prefs-manager";
 import { StaffSettings } from "@/components/staff/staff-settings";
 import { StaffLeaveManager } from "@/components/staff/staff-leave-manager";
 import { StaffScheduleViewer } from "@/components/staff/staff-schedule-viewer";
+import { AddAssignmentDialog } from "@/components/dialogs/add-assignment-dialog";
 import { cn } from "@/lib/utils";
 import {
   Loader2,
@@ -56,7 +57,7 @@ interface StaffSchedule {
 interface StaffSkill {
   id_skill: number;
   preference: number;
-  skills: { name: string } | null;
+  skills: { name: string; category: string } | null;
 }
 
 interface StaffPreference {
@@ -255,6 +256,8 @@ export default function StaffDetailPage() {
             {activeTab === "planning" ? (
               <StaffPlanningContent
                 staffId={staff.id_staff}
+                staffName={`${staff.firstname} ${staff.lastname}`}
+                idPrimaryPosition={staff.id_primary_position as 1 | 2 | 3}
                 assignments={assignments as StaffAssignment[]}
                 leaves={leaves as StaffLeave[]}
                 schedules={schedules as StaffSchedule[]}
@@ -272,6 +275,8 @@ export default function StaffDetailPage() {
         ) : (
           <StaffPlanningContent
             staffId={staff.id_staff}
+            staffName={`${staff.firstname} ${staff.lastname}`}
+            idPrimaryPosition={staff.id_primary_position as 1 | 2 | 3}
             assignments={assignments as StaffAssignment[]}
             leaves={leaves as StaffLeave[]}
             schedules={schedules as StaffSchedule[]}
@@ -286,12 +291,16 @@ export default function StaffDetailPage() {
 
 function StaffPlanningContent({
   staffId,
+  staffName,
+  idPrimaryPosition,
   assignments,
   leaves,
   schedules,
   animate = false,
 }: {
   staffId: number;
+  staffName: string;
+  idPrimaryPosition: 1 | 2 | 3;
   assignments: StaffAssignment[];
   leaves: StaffLeave[];
   schedules: StaffSchedule[];
@@ -299,12 +308,38 @@ function StaffPlanningContent({
 }) {
   const [showLeaveForm, setShowLeaveForm] = useState(false);
   const [showScheduleForm, setShowScheduleForm] = useState(false);
+  const [showAddAssignment, setShowAddAssignment] = useState(false);
+  const [addAssignmentDate, setAddAssignmentDate] = useState("");
 
   return (
     <div className={cn("space-y-4", animate && "animate-fade-in-up")}>
       <SectionCard title="Calendrier" icon={Calendar}>
-        <StaffCalendar assignments={assignments} leaves={leaves} />
+        <StaffCalendar
+          staffId={staffId}
+          staffName={staffName}
+          assignments={assignments}
+          leaves={leaves}
+          onAddClick={() => {
+            setAddAssignmentDate("");
+            setShowAddAssignment(true);
+          }}
+          onCellClick={(date) => {
+            setAddAssignmentDate(date);
+            setShowAddAssignment(true);
+          }}
+        />
       </SectionCard>
+
+      {showAddAssignment && (
+        <AddAssignmentDialog
+          open
+          onClose={() => setShowAddAssignment(false)}
+          staffId={staffId}
+          staffName={staffName}
+          idPrimaryPosition={idPrimaryPosition}
+          defaultDate={addAssignmentDate || undefined}
+        />
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <SectionCard

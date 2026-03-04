@@ -49,7 +49,7 @@ export async function fetchStaffDetail(supabase: SupabaseClient, id: number) {
   const [staffRes, skillsRes, prefsRes, settingsRes, leavesRes, schedulesRes, assignmentsRes] =
     await Promise.all([
       supabase.from("staff").select("*, positions ( name )").eq("id_staff", id).single(),
-      supabase.from("staff_skills").select("*, skills ( name )").eq("id_staff", id),
+      supabase.from("staff_skills").select("*, skills ( name, category )").eq("id_staff", id),
       supabase
         .from("staff_preferences")
         .select("*, sites ( name ), departments ( name ), secretary_roles ( name )")
@@ -69,10 +69,12 @@ export async function fetchStaffDetail(supabase: SupabaseClient, id: number) {
       supabase
         .from("assignments")
         .select(
-          `id_assignment, id_block, assignment_type, id_role, id_skill, source, status,
-           work_blocks ( date, period, block_type, departments ( name ) ),
+          `id_assignment, id_block, assignment_type, id_role, id_skill, id_activity, source, status,
+           work_blocks ( date, period, block_type, departments ( name, sites ( name ) ) ),
            secretary_roles ( name ),
-           skills ( name )`
+           skills ( name ),
+           activity_templates ( name ),
+           staff_schedules ( activity_templates ( name ) )`
         )
         .eq("id_staff", id)
         .not("status", "in", "(CANCELLED,INVALIDATED)")
@@ -164,7 +166,7 @@ export async function addStaffSkill(
         { id_staff: staffId, id_skill: skillId, preference },
         { onConflict: "id_staff,id_skill" }
       )
-      .select("*, skills ( name )")
+      .select("*, skills ( name, category )")
       .single()
   );
 }
@@ -249,13 +251,38 @@ export async function addStaffLeave(
       .single()
   );
 
-  // Cancel affected DOCTOR assignments via RPC
+  // Cancel affected DOCTOR assignments via RPC (handles schedule-based restoration logic)
   await supabase.rpc("fn_cancel_assignments_for_leave", {
     p_staff_id: staffId,
     p_start_date: data.start_date,
     p_end_date: data.end_date,
     p_period: data.period ?? null,
   });
+
+  // Cancel ALL remaining active assignments (secretaries, midwives, manual) that overlap the leave
+  let query = supabase
+    .from("assignments")
+    .select("id_assignment, work_blocks!inner(date, period)")
+    .eq("id_staff", staffId)
+    .not("status", "in", "(CANCELLED,INVALIDATED)")
+    .gte("work_blocks.date", data.start_date)
+    .lte("work_blocks.date", data.end_date);
+
+  if (data.period === "AM") {
+    query = query.in("work_blocks.period", ["AM", "FULL_DAY"]);
+  } else if (data.period === "PM") {
+    query = query.in("work_blocks.period", ["PM", "FULL_DAY"]);
+  }
+  // period null = full day leave → cancel AM, PM, and FULL_DAY (no filter needed)
+
+  const { data: conflicts } = await query;
+  if (conflicts && conflicts.length > 0) {
+    const ids = conflicts.map((c) => c.id_assignment);
+    await supabase
+      .from("assignments")
+      .update({ status: "CANCELLED", updated_at: new Date().toISOString() })
+      .in("id_assignment", ids);
+  }
 
   return leave;
 }
@@ -264,7 +291,7 @@ export async function deleteStaffLeave(supabase: SupabaseClient, leaveId: number
   const leave = throwIfError(
     await supabase
       .from("staff_leaves")
-      .select("id_absence, id_staff, start_date, end_date")
+      .select("id_absence, id_staff, start_date, end_date, period")
       .eq("id_absence", leaveId)
       .single()
   );
@@ -273,12 +300,37 @@ export async function deleteStaffLeave(supabase: SupabaseClient, leaveId: number
 
   throwIfError(await supabase.from("staff_leaves").delete().eq("id_absence", leaveId));
 
-  // Restore assignments from recurring schedules via RPC
+  // Restore DOCTOR assignments via RPC
   await supabase.rpc("fn_restore_assignments_for_leave", {
     p_staff_id: leave.id_staff,
     p_start_date: leave.start_date,
     p_end_date: leave.end_date,
   });
+
+  // Restore CANCELLED assignments linked to an active schedule that overlap the leave
+  let restoreQuery = supabase
+    .from("assignments")
+    .select("id_assignment, work_blocks!inner(date, period)")
+    .eq("id_staff", leave.id_staff)
+    .eq("status", "CANCELLED")
+    .not("id_schedule", "is", null)
+    .gte("work_blocks.date", leave.start_date)
+    .lte("work_blocks.date", leave.end_date);
+
+  if (leave.period === "AM") {
+    restoreQuery = restoreQuery.in("work_blocks.period", ["AM", "FULL_DAY"]);
+  } else if (leave.period === "PM") {
+    restoreQuery = restoreQuery.in("work_blocks.period", ["PM", "FULL_DAY"]);
+  }
+
+  const { data: cancelled } = await restoreQuery;
+  if (cancelled && cancelled.length > 0) {
+    const ids = cancelled.map((c) => c.id_assignment);
+    await supabase
+      .from("assignments")
+      .update({ status: "CONFIRMED", updated_at: new Date().toISOString() })
+      .in("id_assignment", ids);
+  }
 
   return leave;
 }
@@ -311,6 +363,38 @@ export async function fetchRecurrenceTypes(supabase: SupabaseClient) {
   );
 }
 
+/**
+ * Check for conflicting schedules on the same day/period for a staff member.
+ * Period overlap: AM↔AM, AM↔FULL_DAY, PM↔PM, PM↔FULL_DAY, FULL_DAY↔everything.
+ */
+export async function checkScheduleConflicts(
+  supabase: SupabaseClient,
+  staffId: number,
+  dayOfWeek: number,
+  period: string,
+  excludeScheduleId?: number
+) {
+  const conflictingPeriods =
+    period === "FULL_DAY" ? ["AM", "PM", "FULL_DAY"] :
+    period === "AM" ? ["AM", "FULL_DAY"] :
+    ["PM", "FULL_DAY"];
+
+  let query = supabase
+    .from("staff_schedules")
+    .select("id_schedule, period, departments ( name )")
+    .eq("id_staff", staffId)
+    .eq("day_of_week", dayOfWeek)
+    .eq("is_active", true)
+    .in("period", conflictingPeriods);
+
+  if (excludeScheduleId) {
+    query = query.neq("id_schedule", excludeScheduleId);
+  }
+
+  const { data } = await query;
+  return (data ?? []) as unknown as { id_schedule: number; period: string; departments: { name: string } | null }[];
+}
+
 export async function addStaffSchedule(
   supabase: SupabaseClient,
   staffId: number,
@@ -326,13 +410,25 @@ export async function addStaffSchedule(
     id_activity?: number | null;
   }
 ) {
-  return throwIfError(
+  // Check for schedule conflicts
+  const conflicts = await checkScheduleConflicts(supabase, staffId, data.day_of_week, data.period);
+  if (conflicts.length > 0) {
+    const depts = conflicts.map((c) => c.departments?.name ?? "inconnu").join(", ");
+    throw new Error(`Conflit : un planning existe déjà pour ce jour et cette période (${depts}). Supprimez-le d'abord ou modifiez-le.`);
+  }
+
+  const result = throwIfError(
     await supabase
       .from("staff_schedules")
       .insert({ id_staff: staffId, is_active: true, ...data })
       .select("*, departments ( name, sites ( name ) ), recurrence_types ( name, cycle_weeks ), activity_templates ( name )")
       .single()
   );
+
+  // Materialize assignments from the new schedule
+  await supabase.rpc("fn_materialize_schedule", { p_schedule_id: result.id_schedule });
+
+  return result;
 }
 
 export async function updateStaffSchedule(
@@ -350,7 +446,26 @@ export async function updateStaffSchedule(
     id_activity: number | null;
   }>
 ) {
-  return throwIfError(
+  // Check for conflicts if day_of_week or period is changing
+  if (data.day_of_week !== undefined || data.period !== undefined) {
+    const { data: current } = await supabase
+      .from("staff_schedules")
+      .select("id_staff, day_of_week, period")
+      .eq("id_schedule", scheduleId)
+      .single();
+
+    if (current) {
+      const dayOfWeek = data.day_of_week ?? current.day_of_week;
+      const period = data.period ?? current.period;
+      const conflicts = await checkScheduleConflicts(supabase, current.id_staff, dayOfWeek, period, scheduleId);
+      if (conflicts.length > 0) {
+        const depts = conflicts.map((c) => c.departments?.name ?? "inconnu").join(", ");
+        throw new Error(`Conflit : un planning existe déjà pour ce jour et cette période (${depts}).`);
+      }
+    }
+  }
+
+  const result = throwIfError(
     await supabase
       .from("staff_schedules")
       .update(data)
@@ -358,12 +473,37 @@ export async function updateStaffSchedule(
       .select("*, departments ( name, sites ( name ) ), recurrence_types ( name, cycle_weeks ), activity_templates ( name )")
       .single()
   );
+
+  // Re-materialize: delete future assignments and recreate from updated schedule
+  await supabase.rpc("fn_materialize_schedule", { p_schedule_id: scheduleId });
+
+  return result;
 }
 
 export async function removeStaffSchedule(
   supabase: SupabaseClient,
   scheduleId: number
 ) {
+  const today = new Date().toISOString().split("T")[0];
+
+  // Delete future assignments linked to this schedule
+  const { data: futureAssignments } = await supabase
+    .from("assignments")
+    .select("id_assignment, work_blocks!inner(date)")
+    .eq("id_schedule", scheduleId)
+    .gte("work_blocks.date", today);
+
+  if (futureAssignments && futureAssignments.length > 0) {
+    const ids = futureAssignments.map((a) => a.id_assignment);
+    await supabase.from("assignments").delete().in("id_assignment", ids);
+  }
+
+  // Nullify id_schedule on past assignments to allow schedule deletion (FK)
+  await supabase
+    .from("assignments")
+    .update({ id_schedule: null })
+    .eq("id_schedule", scheduleId);
+
   return throwIfError(
     await supabase.from("staff_schedules").delete().eq("id_schedule", scheduleId)
   );

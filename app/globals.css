@@ -88,6 +88,10 @@
     0 2px 6px 0 rgb(0 0 0 / 0.06),
     inset 0 1px 0 0 rgb(255 255 255 / 0.8);
 
+  /* Card shadows — premium people cards */
+  --shadow-card: 0 1px 3px 0 rgb(0 0 0 / 0.04);
+  --shadow-card-hover: 0 16px 40px -8px rgb(0 0 0 / 0.08), 0 4px 12px -2px rgb(0 0 0 / 0.04);
+
   /* Radius */
   --radius: 0.5rem;
 }

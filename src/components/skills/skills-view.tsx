@@ -12,15 +12,16 @@ import {
   Award,
   Stethoscope,
   Scissors,
+  Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { POSITION_LABELS } from "@/lib/constants";
 import { getPositionColors } from "@/lib/utils/position-colors";
 import { getInitials } from "@/lib/utils/initials";
 import { useAllStaffSkills, useAddSkill, useRemoveSkill, useStaffList } from "@/hooks/use-staff";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
-import { fetchSkills as fetchSkillsQuery } from "@/lib/supabase/queries";
+import { fetchSkills as fetchSkillsQuery, deleteSkill as deleteSkillQuery } from "@/lib/supabase/queries";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { CustomSelect } from "@/components/ui/custom-select";
 
@@ -57,6 +58,47 @@ const LEVEL_OPTIONS = [
   { value: "3", label: "3" },
 ];
 
+function StatCard({
+  icon: Icon,
+  label,
+  value,
+  color,
+}: {
+  icon: React.ElementType;
+  label: string;
+  value: number;
+  color: string;
+}) {
+  return (
+    <div
+      className={cn(
+        "relative overflow-hidden rounded-2xl p-4",
+        "bg-card border border-border/40",
+        "shadow-[0_1px_3px_rgba(0,0,0,0.04)]",
+        "hover:shadow-[0_8px_20px_rgba(0,0,0,0.06)]",
+        "transition-all duration-300 group"
+      )}
+    >
+      <div
+        className="absolute -top-6 -right-6 w-20 h-20 rounded-full blur-2xl group-hover:opacity-[0.12] transition-opacity"
+        style={{ backgroundColor: color, opacity: 0.08 }}
+      />
+      <div className="relative flex items-center gap-3">
+        <div
+          className="p-2.5 rounded-xl text-white shadow-sm"
+          style={{ backgroundColor: color }}
+        >
+          <Icon className="w-5 h-5" />
+        </div>
+        <div>
+          <p className="text-xs text-muted-foreground font-medium">{label}</p>
+          <p className="text-2xl font-bold" style={{ color }}>{value}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function categoryAccent(cat: string) {
   return cat === "chirurgie" ? "#9B7BA8" : "#4A6FA5";
 }
@@ -70,10 +112,12 @@ function categoryIcon(cat: string) {
 // ── Main Component ───────────────────────────────────────
 
 export function SkillsView() {
+  const queryClient = useQueryClient();
+  const supabase = createClient();
   const { data: rawSkillEntries, isLoading } = useAllStaffSkills();
   const { data: allSkills } = useQuery({
     queryKey: ["config", "skills"],
-    queryFn: () => fetchSkillsQuery(createClient()),
+    queryFn: () => fetchSkillsQuery(supabase),
   });
   const { data: staffList } = useStaffList({ active: "true" });
   const addSkill = useAddSkill();
@@ -95,8 +139,22 @@ export function SkillsView() {
   const [addStaffId, setAddStaffId] = useState("");
   const [addPreference, setAddPreference] = useState("2");
 
-  // Delete
+  // Delete member from skill
   const [confirmDelete, setConfirmDelete] = useState<{ staffId: number; skillId: number; staffName: string; skillName: string } | null>(null);
+
+  // Delete entire skill
+  const [confirmDeleteSkill, setConfirmDeleteSkill] = useState<{ id_skill: number; name: string; memberCount: number } | null>(null);
+
+  const deleteSkillMut = useMutation({
+    mutationFn: (id: number) => deleteSkillQuery(supabase, id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["config", "skills"] });
+      queryClient.invalidateQueries({ queryKey: ["config", "tiers"] });
+      queryClient.invalidateQueries({ queryKey: ["config", "activity-requirements"] });
+      queryClient.invalidateQueries({ queryKey: ["staff-skills"] });
+      setConfirmDeleteSkill(null);
+    },
+  });
 
   // Normalize raw data
   const normalized = useMemo(() => {
@@ -212,6 +270,14 @@ export function SkillsView() {
     );
   };
 
+  // Stats (unfiltered)
+  const stats = useMemo(() => {
+    const totalSkills = allSkills ? (allSkills as { id_skill: number }[]).length : 0;
+    const totalAttributions = normalized.length;
+    const uniqueStaff = new Set(normalized.map((e) => e.id_staff)).size;
+    return { totalSkills, totalAttributions, uniqueStaff };
+  }, [allSkills, normalized]);
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -222,6 +288,13 @@ export function SkillsView() {
 
   return (
     <div className="space-y-6">
+      {/* ── Stats ────────────────────────────────────── */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <StatCard icon={Award} label="Compétences" value={stats.totalSkills} color="#4A6FA5" />
+        <StatCard icon={Users} label="Personnel qualifié" value={stats.uniqueStaff} color="#6B8A7A" />
+        <StatCard icon={Stethoscope} label="Attributions" value={stats.totalAttributions} color="#9B7BA8" />
+      </div>
+
       {/* ── Toolbar ────────────────────────────────────── */}
       <div className="flex flex-wrap items-center gap-3 bg-card rounded-xl border border-border/50 shadow-subtle px-4 py-2">
         <div className="relative flex-1 min-w-[180px] max-w-sm">
@@ -320,6 +393,19 @@ export function SkillsView() {
                             >
                               {group.members.length}
                             </span>
+                            <button
+                              onClick={() =>
+                                setConfirmDeleteSkill({
+                                  id_skill: group.id_skill,
+                                  name: group.name,
+                                  memberCount: group.members.length,
+                                })
+                              }
+                              className="p-1.5 text-muted-foreground/40 hover:text-destructive hover:bg-destructive/5 rounded-lg transition-colors"
+                              title="Supprimer la compétence"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
                           </div>
 
                           {/* Members */}
@@ -488,7 +574,7 @@ export function SkillsView() {
         </>
       )}
 
-      {/* ── Delete Confirm ─────────────────────────────── */}
+      {/* ── Delete member from skill ────────────────────── */}
       <ConfirmDialog
         open={!!confirmDelete}
         variant="danger"
@@ -502,6 +588,28 @@ export function SkillsView() {
         onConfirm={handleDelete}
         onCancel={() => setConfirmDelete(null)}
         isPending={removeSkill.isPending}
+      />
+
+      {/* ── Delete entire skill ──────────────────────────── */}
+      <ConfirmDialog
+        open={!!confirmDeleteSkill}
+        variant="danger"
+        title="Supprimer cette compétence ?"
+        message={
+          confirmDeleteSkill
+            ? `La compétence « ${confirmDeleteSkill.name} » sera définitivement supprimée${
+                confirmDeleteSkill.memberCount > 0
+                  ? ` ainsi que les ${confirmDeleteSkill.memberCount} association${confirmDeleteSkill.memberCount > 1 ? "s" : ""} avec le personnel`
+                  : ""
+              }.`
+            : ""
+        }
+        confirmLabel="Supprimer"
+        onConfirm={() => {
+          if (confirmDeleteSkill) deleteSkillMut.mutate(confirmDeleteSkill.id_skill);
+        }}
+        onCancel={() => setConfirmDeleteSkill(null)}
+        isPending={deleteSkillMut.isPending}
       />
     </div>
   );

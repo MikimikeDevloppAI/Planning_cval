@@ -3,8 +3,14 @@
 import { useState, useMemo } from "react";
 import { X, Loader2, UserMinus, UserPlus, Building2, Sun, Moon } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useCancelAssignment } from "@/hooks/use-assignments";
-import { resolveRoleOptions, slotKey, type NeedSlot } from "@/lib/utils/role-selection";
+import { useReassignToAdmin } from "@/hooks/use-assignments";
+import {
+  resolveRoleOptions,
+  slotKey,
+  buildUnifiedSlots,
+  type NeedSlot,
+  type UnifiedSlot,
+} from "@/lib/utils/role-selection";
 import type { PlanningBlock, StaffingNeed } from "@/lib/types/database";
 
 // ── Types imported from departments-table-view ──────────
@@ -54,37 +60,6 @@ interface AssignmentDialogProps {
   isPending?: boolean;
 }
 
-// ── Helpers ─────────────────────────────────────────────
-
-interface ExistingAssignment {
-  id_assignment: number;
-  id_staff: number;
-  firstname: string;
-  lastname: string;
-  roleName: string | null;
-  skillName: string | null;
-}
-
-function getExistingAssignments(blocks: PlanningBlock[]): ExistingAssignment[] {
-  const seen = new Set<number>();
-  const result: ExistingAssignment[] = [];
-  for (const block of blocks) {
-    for (const a of block.assignments) {
-      if (a.assignment_type === "DOCTOR" || seen.has(a.id_assignment)) continue;
-      seen.add(a.id_assignment);
-      result.push({
-        id_assignment: a.id_assignment,
-        id_staff: a.id_staff,
-        firstname: a.firstname,
-        lastname: a.lastname,
-        roleName: a.role_name,
-        skillName: a.skill_name,
-      });
-    }
-  }
-  return result;
-}
-
 // ── Component ───────────────────────────────────────────
 
 export function AssignmentDialog({
@@ -96,7 +71,7 @@ export function AssignmentDialog({
   onConfirmFull,
   isPending,
 }: AssignmentDialogProps) {
-  const cancelAssignment = useCancelAssignment();
+  const reassignToAdmin = useReassignToAdmin();
   const isDoctor = dragData.personType === "DOCTOR";
   const hasAm = dropData.amBlocks.length > 0;
   const hasPm = dropData.pmBlocks.length > 0;
@@ -104,9 +79,14 @@ export function AssignmentDialog({
   const defaultPeriod = dragData.period === "PM" || (!hasAm && hasPm) ? "PM" as const : dragData.period === "FULL" && canFull ? "FULL" as const : "AM" as const;
 
   const [selectedPeriod, setSelectedPeriod] = useState<"AM" | "PM" | "FULL">(defaultPeriod);
-  const [pendingRemove, setPendingRemove] = useState<{ id_assignment: number; name: string } | null>(null);
+  const [pendingRemove, setPendingRemove] = useState<{
+    id_assignment: number;
+    id_staff: number;
+    name: string;
+    period: "AM" | "PM";
+  } | null>(null);
 
-  // Resolve role options
+  // Resolve role options (for autoSelect + confirm logic)
   const amSelData = useMemo(
     () => !isDoctor ? resolveRoleOptions(dropData.amBlocks, dropData.amNeeds) : null,
     [isDoctor, dropData.amBlocks, dropData.amNeeds],
@@ -116,12 +96,18 @@ export function AssignmentDialog({
     [isDoctor, dropData.pmBlocks, dropData.pmNeeds],
   );
 
+  // Unified slots (needs + assigned people combined)
+  const amUnified = useMemo(
+    () => buildUnifiedSlots(dropData.amBlocks, dropData.amNeeds),
+    [dropData.amBlocks, dropData.amNeeds],
+  );
+  const pmUnified = useMemo(
+    () => buildUnifiedSlots(dropData.pmBlocks, dropData.pmNeeds),
+    [dropData.pmBlocks, dropData.pmNeeds],
+  );
+
   const activeSelData = selectedPeriod === "PM" ? pmSelData : amSelData;
   const isAdmin = activeSelData?.slots.length === 0 && activeSelData.autoSelect?.roleId === 1;
-
-  // Existing assignments per period
-  const amAssigned = useMemo(() => getExistingAssignments(dropData.amBlocks), [dropData.amBlocks]);
-  const pmAssigned = useMemo(() => getExistingAssignments(dropData.pmBlocks), [dropData.pmBlocks]);
 
   // Slot selection state
   const [amSlotKey, setAmSlotKey] = useState<string | null>(() => {
@@ -197,17 +183,23 @@ export function AssignmentDialog({
     }
   };
 
-  const handleRemove = (assignmentId: number) => {
-    cancelAssignment.mutate(
-      { assignmentId },
+  const handleRemove = () => {
+    if (!pendingRemove) return;
+    reassignToAdmin.mutate(
+      {
+        assignmentId: pendingRemove.id_assignment,
+        staffId: pendingRemove.id_staff,
+        date: dropData.date,
+        period: pendingRemove.period,
+      },
       { onSuccess: () => setPendingRemove(null) },
     );
   };
 
   // Slot label
-  const getSlotLabel = (slot: NeedSlot) => {
-    const distinctRoles = new Set(activeSelData?.slots.map((s) => s.id_role) ?? []);
-    const distinctSkills = new Set(activeSelData?.slots.map((s) => s.id_skill) ?? []);
+  const getSlotLabel = (slot: NeedSlot, allSlots: UnifiedSlot[]) => {
+    const distinctRoles = new Set(allSlots.map((s) => s.id_role));
+    const distinctSkills = new Set(allSlots.map((s) => s.id_skill));
     const showRoleOnly = distinctSkills.size <= 1 && distinctRoles.size > 1;
     const showSkillOnly = distinctRoles.size <= 1 && distinctSkills.size > 1;
 
@@ -217,100 +209,125 @@ export function AssignmentDialog({
     return `${slot.role_name ?? `Rôle ${slot.id_role}`} · ${slot.skill_name}`;
   };
 
-  /** Render the assigned people table for a period */
-  const renderAssigned = (assigned: ExistingAssignment[], label: string) => {
-    if (assigned.length === 0) return null;
+  /** Render the unified staffing table for a period */
+  const renderStaffingTable = (
+    slots: UnifiedSlot[],
+    selectedKey: string | null,
+    onSelect: (key: string) => void,
+    tablePeriod: "AM" | "PM",
+  ) => {
+    if (slots.length === 0) return null;
 
     return (
-      <div>
-        <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider px-1 mb-1.5">
-          {label}
-        </p>
-        <div className="rounded-lg border border-slate-200 bg-white overflow-hidden divide-y divide-slate-100">
-          {assigned.map((a) => (
-            <div
-              key={a.id_assignment}
-              className="flex items-center px-3 py-2 group/row hover:bg-slate-50/80 transition-colors"
-            >
-              <div className="flex-1 min-w-0 flex items-center gap-3">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-                <span className="text-[13px] font-medium text-foreground truncate">
-                  {a.firstname} {a.lastname}
-                </span>
+      <div className="rounded-xl border border-slate-200 overflow-hidden">
+        {/* Header */}
+        <div className="grid grid-cols-[1fr_1.2fr_auto] bg-slate-50/80 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+          <div className="px-3 py-2">Poste</div>
+          <div className="px-3 py-2">Assigné(s)</div>
+          <div className="px-3 py-2 text-right min-w-[80px]">Statut</div>
+        </div>
+
+        {/* Rows */}
+        <div className="divide-y divide-slate-100">
+          {slots.map((slot) => {
+            const key = slotKey(slot);
+            const isSelected = selectedKey === key;
+            const hasGap = slot.gap > 0;
+
+            return (
+              <div
+                key={key}
+                onClick={() => !isDoctor && onSelect(key)}
+                className={cn(
+                  "grid grid-cols-[1fr_1.2fr_auto] transition-colors",
+                  !isDoctor && "cursor-pointer",
+                  hasGap && "bg-red-50/40",
+                  isSelected && "bg-primary/5 ring-1 ring-inset ring-primary/20",
+                  !isSelected && !hasGap && "hover:bg-slate-50/60",
+                  !isSelected && hasGap && "hover:bg-red-50/60",
+                )}
+              >
+                {/* Col 1: Poste (radio + label) */}
+                <div className="px-3 py-2.5 flex items-start gap-2">
+                  {!isDoctor && (
+                    <span className={cn(
+                      "mt-0.5 w-4 h-4 rounded-full border-2 shrink-0 flex items-center justify-center",
+                      isSelected ? "border-primary" : "border-slate-300",
+                    )}>
+                      {isSelected && <span className="w-2 h-2 rounded-full bg-primary" />}
+                    </span>
+                  )}
+                  <span className={cn(
+                    "text-[13px] font-semibold leading-tight",
+                    isSelected ? "text-primary" : "text-foreground",
+                  )}>
+                    {getSlotLabel(slot, slots)}
+                  </span>
+                </div>
+
+                {/* Col 2: Assigned people */}
+                <div className="px-3 py-2.5">
+                  {slot.people.length > 0 ? (
+                    <div className="flex flex-col gap-1">
+                      {slot.people.map((p) => (
+                        <div
+                          key={p.id_assignment}
+                          className="flex items-center gap-2 group/person"
+                        >
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                          <span className="text-[12px] text-foreground truncate">
+                            {p.firstname} {p.lastname}
+                          </span>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setPendingRemove({
+                                id_assignment: p.id_assignment,
+                                id_staff: p.id_staff,
+                                name: `${p.firstname} ${p.lastname}`,
+                                period: tablePeriod,
+                              });
+                            }}
+                            className="opacity-0 group-hover/person:opacity-100 p-0.5 rounded text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all ml-auto shrink-0"
+                            title="Retirer"
+                          >
+                            <UserMinus className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="text-[12px] text-slate-400 italic">Aucun</span>
+                  )}
+                </div>
+
+                {/* Col 3: Status */}
+                <div className="px-3 py-2.5 flex flex-col items-end gap-1 min-w-[80px]">
+                  <span className="text-[12px] font-medium text-slate-500">
+                    {slot.people.length}/{slot.needed}
+                  </span>
+                  {hasGap ? (
+                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-red-100 text-red-600">
+                      {slot.gap} manque{slot.gap > 1 ? "s" : ""}
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-600">
+                      Complet
+                    </span>
+                  )}
+                </div>
               </div>
-              <div className="shrink-0 flex items-center gap-2">
-                <span className="text-[12px] text-muted-foreground">
-                  {[a.roleName, a.skillName].filter(Boolean).join(" · ") || "Standard"}
-                </span>
-                <button
-                  onClick={() => setPendingRemove({ id_assignment: a.id_assignment, name: `${a.firstname} ${a.lastname}` })}
-                  className="opacity-0 group-hover/row:opacity-100 p-1 rounded-md text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all"
-                  title="Retirer"
-                >
-                  <UserMinus className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     );
   };
 
-  /** Render slot selector for a period */
-  const renderSlots = (slots: NeedSlot[], selectedKey: string | null, onSelect: (key: string) => void) => {
-    if (slots.length === 0) return null;
-
-    return (
-      <div className="space-y-1">
-        {slots.map((slot) => {
-          const key = slotKey(slot);
-          const isSelected = selectedKey === key;
-          return (
-            <button
-              key={key}
-              onClick={() => onSelect(key)}
-              className={cn(
-                "w-full flex items-center gap-2 px-3 py-2 rounded-lg border transition-all text-left",
-                isSelected
-                  ? "border-primary bg-primary/5 ring-1 ring-primary/20"
-                  : "border-slate-200 hover:border-slate-300 hover:bg-slate-50",
-              )}
-            >
-              <span className={cn(
-                "w-4 h-4 rounded-full border-2 shrink-0 flex items-center justify-center",
-                isSelected ? "border-primary" : "border-slate-300",
-              )}>
-                {isSelected && <span className="w-2 h-2 rounded-full bg-primary" />}
-              </span>
-              <span className={cn(
-                "text-[13px] font-medium flex-1",
-                isSelected ? "text-primary" : "text-foreground",
-              )}>
-                {getSlotLabel(slot)}
-              </span>
-              <span className={cn(
-                "text-[11px] font-semibold shrink-0 px-2 py-0.5 rounded-full",
-                slot.gap > 0
-                  ? "bg-red-100 text-red-600"
-                  : "bg-slate-100 text-slate-400",
-              )}>
-                {slot.gap > 0
-                  ? `${slot.gap} manque${slot.gap > 1 ? "s" : ""}`
-                  : "complet"}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-    );
-  };
-
-  /** Render a period section (assigned + slots) */
+  /** Render a period section */
   const renderPeriodSection = (
     period: "AM" | "PM",
-    assigned: ExistingAssignment[],
-    slots: NeedSlot[],
+    unified: UnifiedSlot[],
     selectedKey: string | null,
     onSelect: (key: string) => void,
     showLabel: boolean,
@@ -321,7 +338,7 @@ export function AssignmentDialog({
     const label = period === "AM" ? "Matin" : "Après-midi";
 
     return (
-      <div className="space-y-3">
+      <div className="space-y-2.5">
         {showLabel && (
           <div className="flex items-center gap-1.5 text-sm font-bold text-foreground">
             {icon}
@@ -329,20 +346,17 @@ export function AssignmentDialog({
           </div>
         )}
 
-        {renderAssigned(assigned, showLabel ? "Personnel assigné" : `Personnel assigné — ${label}`)}
+        {!isDoctor && unified.length > 0 && renderStaffingTable(unified, selectedKey, onSelect, period)}
 
-        {!isDoctor && slots.length > 0 && (
-          <div>
-            <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider px-1 mb-1.5">
-              Poste pour {dragData.personName.split(" ")[0]}
-            </p>
-            {renderSlots(slots, selectedKey, onSelect)}
+        {!isDoctor && unified.length === 0 && isAdmin && (
+          <div className="px-3 py-2 text-[12px] text-muted-foreground bg-slate-50 rounded-lg border border-slate-200/60">
+            Rôle : Standard (administration)
           </div>
         )}
 
-        {!isDoctor && isAdmin && (
+        {isDoctor && (
           <div className="px-3 py-2 text-[12px] text-muted-foreground bg-slate-50 rounded-lg border border-slate-200/60">
-            Rôle : Standard (administration)
+            Déplacement médecin
           </div>
         )}
       </div>
@@ -412,15 +426,14 @@ export function AssignmentDialog({
         <div className="flex-1 min-h-0 overflow-auto px-6 pb-2 space-y-4">
           {selectedPeriod === "FULL" ? (
             <>
-              {renderPeriodSection("AM", amAssigned, amSelData?.slots ?? [], amSlotKey, setAmSlotKey, true)}
+              {renderPeriodSection("AM", amUnified, amSlotKey, setAmSlotKey, true)}
               <div className="border-t border-slate-200" />
-              {renderPeriodSection("PM", pmAssigned, pmSelData?.slots ?? [], pmSlotKey, setPmSlotKey, true)}
+              {renderPeriodSection("PM", pmUnified, pmSlotKey, setPmSlotKey, true)}
             </>
           ) : (
             renderPeriodSection(
               selectedPeriod,
-              selectedPeriod === "PM" ? pmAssigned : amAssigned,
-              activeSelData?.slots ?? [],
+              selectedPeriod === "PM" ? pmUnified : amUnified,
               selectedPeriod === "PM" ? pmSlotKey : amSlotKey,
               selectedPeriod === "PM" ? setPmSlotKey : setAmSlotKey,
               false,
@@ -454,7 +467,7 @@ export function AssignmentDialog({
                 Retirer {pendingRemove.name} ?
               </p>
               <p className="text-xs text-muted-foreground mb-4">
-                Cette personne sera désassignée de ce poste.
+                Cette personne sera basculée en administratif pour ce créneau.
               </p>
               <div className="flex gap-2 justify-end">
                 <button
@@ -464,12 +477,12 @@ export function AssignmentDialog({
                   Annuler
                 </button>
                 <button
-                  onClick={() => handleRemove(pendingRemove.id_assignment)}
-                  disabled={cancelAssignment.isPending}
+                  onClick={handleRemove}
+                  disabled={reassignToAdmin.isPending}
                   className="px-3 py-1.5 text-sm rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 transition-colors flex items-center gap-1.5"
                 >
-                  {cancelAssignment.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                  Retirer
+                  {reassignToAdmin.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  Passer en administratif
                 </button>
               </div>
             </div>

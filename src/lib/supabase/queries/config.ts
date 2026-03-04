@@ -6,11 +6,37 @@ import { throwIfError } from "../helpers";
 // ============================================================
 
 export async function fetchSites(supabase: SupabaseClient) {
-  return throwIfError(
+  const sites = throwIfError(
     await supabase
       .from("sites")
       .select("*, departments ( id_department, name, is_active )")
       .order("name")
+  );
+
+  // Fetch rooms separately (no FK from rooms.id_location → departments)
+  const rooms = throwIfError(
+    await supabase.from("rooms").select("id_room, id_location, name, is_active").order("name")
+  );
+
+  // Merge rooms into departments by id_location = id_department
+  const roomsByDept = new Map<number, typeof rooms>();
+  for (const room of rooms as Array<{ id_room: number; id_location: number; name: string; is_active: boolean }>) {
+    if (!roomsByDept.has(room.id_location)) roomsByDept.set(room.id_location, []);
+    roomsByDept.get(room.id_location)!.push(room);
+  }
+
+  for (const site of sites as Array<{ departments: Array<{ id_department: number; rooms?: unknown[] }> }>) {
+    for (const dept of site.departments) {
+      (dept as { rooms: unknown[] }).rooms = roomsByDept.get(dept.id_department) ?? [];
+    }
+  }
+
+  return sites;
+}
+
+export async function createSite(supabase: SupabaseClient, name: string) {
+  return throwIfError(
+    await supabase.from("sites").insert({ name }).select().single()
   );
 }
 
@@ -60,6 +86,37 @@ export async function deleteDepartment(supabase: SupabaseClient, id: number) {
 }
 
 // ============================================================
+// Rooms
+// ============================================================
+
+export async function createRoom(
+  supabase: SupabaseClient,
+  data: { name: string; id_department: number }
+) {
+  return throwIfError(
+    await supabase
+      .from("rooms")
+      .insert({ name: data.name, id_location: data.id_department })
+      .select()
+      .single()
+  );
+}
+
+export async function updateRoom(
+  supabase: SupabaseClient,
+  id: number,
+  data: Partial<{ name: string; is_active: boolean }>
+) {
+  return throwIfError(
+    await supabase.from("rooms").update(data).eq("id_room", id).select().single()
+  );
+}
+
+export async function deleteRoom(supabase: SupabaseClient, id: number) {
+  return throwIfError(await supabase.from("rooms").delete().eq("id_room", id));
+}
+
+// ============================================================
 // Skills
 // ============================================================
 
@@ -67,9 +124,9 @@ export async function fetchSkills(supabase: SupabaseClient) {
   return throwIfError(await supabase.from("skills").select("*").order("name"));
 }
 
-export async function createSkill(supabase: SupabaseClient, name: string) {
+export async function createSkill(supabase: SupabaseClient, name: string, category: string = "consultation") {
   return throwIfError(
-    await supabase.from("skills").insert({ name }).select().single()
+    await supabase.from("skills").insert({ name, category }).select().single()
   );
 }
 
@@ -84,6 +141,10 @@ export async function updateSkill(
 }
 
 export async function deleteSkill(supabase: SupabaseClient, id: number) {
+  // Remove all foreign key references first
+  await supabase.from("staff_skills").delete().eq("id_skill", id);
+  await supabase.from("activity_requirements").delete().eq("id_skill", id);
+  await supabase.from("activity_staffing_tiers").delete().eq("id_skill", id);
   return throwIfError(await supabase.from("skills").delete().eq("id_skill", id));
 }
 
@@ -157,6 +218,12 @@ export async function deleteActivityRequirement(supabase: SupabaseClient, id: nu
 
 export async function fetchRoles(supabase: SupabaseClient) {
   return throwIfError(await supabase.from("secretary_roles").select("*").order("id_role"));
+}
+
+export async function createRole(supabase: SupabaseClient, name: string) {
+  return throwIfError(
+    await supabase.from("secretary_roles").insert({ name }).select().single()
+  );
 }
 
 export async function updateRole(

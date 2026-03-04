@@ -123,12 +123,21 @@ export function MoveAssignmentDialog({
     const personName = `${person.firstname} ${person.lastname}`;
     const onError = (err: Error) => setError(err.message ?? "Erreur inconnue");
 
+    // Resolve real dept ID and room ID from target blocks.
+    // When targeting a room, the "dept" in the UI is actually a room entry
+    // (id_department = roomId). The real dept ID is in the blocks themselves.
+    const { blocks: resolvedBlocks } = findTargetPeriodData(sites, targetDeptId as number, targetDate, targetPeriod);
+    const firstBlock = resolvedBlocks[0];
+    const realDeptId = firstBlock?.id_department ?? (targetDeptId as number);
+    const roomId = firstBlock?.id_room ?? null;
+
     if (person.type === "DOCTOR") {
       moveDoctorSchedule.mutate(
         {
           staffId: person.id_staff,
           sourceAssignmentId: person.id_assignment,
-          targetDeptId: targetDeptId as number,
+          targetDeptId: realDeptId,
+          targetRoomId: roomId,
           targetDate,
           period: targetPeriod,
           activityId: person.activityId,
@@ -141,7 +150,8 @@ export function MoveAssignmentDialog({
       moveAssignment.mutate(
         {
           oldAssignmentId: person.id_assignment,
-          targetDeptId: targetDeptId as number,
+          targetDeptId: realDeptId,
+          targetRoomId: roomId,
           targetDate,
           period: targetPeriod,
           staffId: person.id_staff,
@@ -410,7 +420,7 @@ export function MoveAssignmentDialog({
             )}
 
             {/* Actions */}
-            <div className="flex gap-2 justify-end pt-1">
+            <div className="flex gap-2 justify-end pt-4">
               <button
                 onClick={step === "role" ? () => setStep("target") : onClose}
                 className="px-4 py-2 text-sm rounded-lg border border-border/50 text-foreground hover:bg-muted/50 transition-colors"

@@ -106,16 +106,12 @@ export function StaffScheduleViewer({ staffId, schedules, showForm, onToggleForm
   });
   const sites = (sitesData ?? []) as SiteOption[];
   const allDepts = sites.flatMap((s) =>
-    s.departments.filter((d) => d.is_active).map((d) => ({ ...d, siteName: s.name }))
+    s.departments.filter((d) => d.is_active).map((d) => ({ ...d, id_site: s.id_site, siteName: s.name }))
   );
 
-  const deptOptions = useMemo(
-    () => allDepts.map((d) => ({ value: String(d.id_department), label: `${d.name} (${d.siteName})` })),
-    [allDepts]
-  );
-  const deptOptionsShort = useMemo(
-    () => allDepts.map((d) => ({ value: String(d.id_department), label: d.name })),
-    [allDepts]
+  const siteOptions = useMemo(
+    () => sites.map((s) => ({ value: String(s.id_site), label: s.name })),
+    [sites]
   );
 
   const { data: recurrenceData } = useQuery({
@@ -124,7 +120,9 @@ export function StaffScheduleViewer({ staffId, schedules, showForm, onToggleForm
   });
   const recurrenceTypes = (recurrenceData ?? []) as RecurrenceOption[];
   const recurrenceOptions = useMemo(
-    () => recurrenceTypes.map((r) => ({ value: String(r.id_recurrence), label: `${r.name} (${r.cycle_weeks} sem.)` })),
+    () => recurrenceTypes
+      .filter((r) => r.cycle_weeks > 1)
+      .map((r) => ({ value: String(r.id_recurrence), label: r.name })),
     [recurrenceTypes]
   );
 
@@ -140,11 +138,14 @@ export function StaffScheduleViewer({ staffId, schedules, showForm, onToggleForm
 
   const [deleteRow, setDeleteRow] = useState<DisplayRow | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [editError, setEditError] = useState<string | null>(null);
 
   // Add form state
   const [formDay, setFormDay] = useState<number>(1);
   const [formPeriod, setFormPeriod] = useState<string>("AM");
   const [formType, setFormType] = useState<string>("FIXED");
+  const [formSite, setFormSite] = useState<number | "">("");
   const [formDept, setFormDept] = useState<number | "">("");
   const [formRecurrence, setFormRecurrence] = useState<number | "">("");
   const [formWeekOffset, setFormWeekOffset] = useState<number>(0);
@@ -156,12 +157,25 @@ export function StaffScheduleViewer({ staffId, schedules, showForm, onToggleForm
   const [editDay, setEditDay] = useState<number>(1);
   const [editPeriod, setEditPeriod] = useState<string>("AM");
   const [editType, setEditType] = useState<string>("FIXED");
+  const [editSite, setEditSite] = useState<number | "">("");
   const [editDept, setEditDept] = useState<number | "">("");
   const [editRecurrence, setEditRecurrence] = useState<number | "">("");
   const [editWeekOffset, setEditWeekOffset] = useState<number>(0);
   const [editStartDate, setEditStartDate] = useState("");
   const [editEndDate, setEditEndDate] = useState("");
   const [editActivity, setEditActivity] = useState<number | "">("");
+
+  // Filtered dept options based on selected site
+  const formDeptOptions = useMemo(
+    () => (formSite ? allDepts.filter((d) => d.id_site === formSite) : allDepts)
+      .map((d) => ({ value: String(d.id_department), label: d.name })),
+    [formSite, allDepts]
+  );
+  const editDeptOptions = useMemo(
+    () => (editSite ? allDepts.filter((d) => d.id_site === editSite) : allDepts)
+      .map((d) => ({ value: String(d.id_department), label: d.name })),
+    [editSite, allDepts]
+  );
 
   const selectedRecurrence = recurrenceTypes.find(
     (r) => r.id_recurrence === formRecurrence
@@ -170,6 +184,9 @@ export function StaffScheduleViewer({ staffId, schedules, showForm, onToggleForm
   const editSelectedRecurrence = recurrenceTypes.find(
     (r) => r.id_recurrence === editRecurrence
   );
+
+  // Default recurrence = "Chaque semaine" (cycle_weeks = 1)
+  const defaultRecurrenceId = recurrenceTypes.find((r) => r.cycle_weeks === 1)?.id_recurrence ?? null;
 
   const weekOffsetOptions = (cycleWeeks: number) =>
     Array.from({ length: cycleWeeks }, (_, i) => ({
@@ -193,6 +210,7 @@ export function StaffScheduleViewer({ staffId, schedules, showForm, onToggleForm
   const handleAdd = () => {
     if (!formDept) return;
     if (formDeptIsBlocOp && !formActivity) return;
+    setFormError(null);
     addSchedule.mutate(
       {
         staffId,
@@ -201,8 +219,8 @@ export function StaffScheduleViewer({ staffId, schedules, showForm, onToggleForm
           day_of_week: formDay,
           period: formPeriod,
           id_department: formDept as number,
-          id_recurrence: formRecurrence ? (formRecurrence as number) : null,
-          week_offset: formRecurrence ? formWeekOffset : null,
+          id_recurrence: formRecurrence ? (formRecurrence as number) : defaultRecurrenceId,
+          week_offset: formRecurrence ? formWeekOffset : 0,
           start_date: formStartDate || null,
           end_date: formEndDate || null,
           id_activity: formActivity ? (formActivity as number) : null,
@@ -211,12 +229,17 @@ export function StaffScheduleViewer({ staffId, schedules, showForm, onToggleForm
       {
         onSuccess: () => {
           onToggleForm(false);
+          setFormSite("");
           setFormDept("");
           setFormRecurrence("");
           setFormWeekOffset(0);
           setFormStartDate("");
           setFormEndDate("");
           setFormActivity("");
+          setFormError(null);
+        },
+        onError: (err) => {
+          setFormError(err instanceof Error ? err.message : "Erreur inconnue");
         },
       }
     );
@@ -229,6 +252,9 @@ export function StaffScheduleViewer({ staffId, schedules, showForm, onToggleForm
     // Map displayPeriod back to DB value
     setEditPeriod(row.displayPeriod === "JC" ? "DAY" : row.displayPeriod);
     setEditType(s.schedule_type);
+    // Derive site from department
+    const dept = allDepts.find((d) => d.id_department === s.id_department);
+    setEditSite(dept?.id_site ?? "");
     setEditDept(s.id_department ?? "");
     setEditRecurrence(s.id_recurrence ?? "");
     setEditWeekOffset(s.week_offset ?? 0);
@@ -239,6 +265,7 @@ export function StaffScheduleViewer({ staffId, schedules, showForm, onToggleForm
 
   const handleUpdate = () => {
     if (!editingId || !editDept) return;
+    setEditError(null);
     updateSchedule.mutate(
       {
         staffId,
@@ -248,15 +275,21 @@ export function StaffScheduleViewer({ staffId, schedules, showForm, onToggleForm
           period: editPeriod,
           schedule_type: editType,
           id_department: editDept as number,
-          id_recurrence: editRecurrence ? (editRecurrence as number) : null,
-          week_offset: editRecurrence ? editWeekOffset : null,
+          id_recurrence: editRecurrence ? (editRecurrence as number) : defaultRecurrenceId,
+          week_offset: editRecurrence ? editWeekOffset : 0,
           start_date: editStartDate || null,
           end_date: editEndDate || null,
           id_activity: editActivity ? (editActivity as number) : null,
         },
       },
       {
-        onSuccess: () => setEditingId(null),
+        onSuccess: () => {
+          setEditingId(null);
+          setEditError(null);
+        },
+        onError: (err) => {
+          setEditError(err instanceof Error ? err.message : "Erreur inconnue");
+        },
       }
     );
   };
@@ -353,8 +386,8 @@ export function StaffScheduleViewer({ staffId, schedules, showForm, onToggleForm
       {/* Add form */}
       {showForm && (
         <div className="bg-muted/30 rounded-xl border border-border/50 p-5 space-y-4">
-          {/* Row 1: Jour / Période / Département */}
-          <div className="grid grid-cols-3 gap-3">
+          {/* Row 1: Jour / Période */}
+          <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-muted-foreground mb-1.5">
                 Jour
@@ -379,6 +412,26 @@ export function StaffScheduleViewer({ staffId, schedules, showForm, onToggleForm
                 className="w-full"
               />
             </div>
+          </div>
+
+          {/* Row 2: Site / Département */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-muted-foreground mb-1.5">
+                Site
+              </label>
+              <CustomSelect
+                value={formSite ? String(formSite) : ""}
+                onChange={(v) => {
+                  setFormSite(v ? Number(v) : "");
+                  setFormDept("");
+                  setFormActivity("");
+                }}
+                options={siteOptions}
+                placeholder="Choisir..."
+                className="w-full"
+              />
+            </div>
             <div>
               <label className="block text-xs font-medium text-muted-foreground mb-1.5">
                 Département
@@ -389,8 +442,8 @@ export function StaffScheduleViewer({ staffId, schedules, showForm, onToggleForm
                   setFormDept(v ? Number(v) : "");
                   setFormActivity("");
                 }}
-                options={deptOptions}
-                placeholder="Choisir..."
+                options={formDeptOptions}
+                placeholder={formSite ? "Choisir..." : "Sélectionner un site"}
                 className="w-full"
               />
             </div>
@@ -472,10 +525,17 @@ export function StaffScheduleViewer({ staffId, schedules, showForm, onToggleForm
             </div>
           </div>
 
+          {/* Error banner */}
+          {formError && (
+            <div className="rounded-lg bg-destructive/10 border border-destructive/30 px-3 py-2 text-sm text-destructive">
+              {formError}
+            </div>
+          )}
+
           {/* Actions */}
           <div className="flex gap-2 justify-end pt-1">
             <button
-              onClick={() => onToggleForm(false)}
+              onClick={() => { onToggleForm(false); setFormError(null); }}
               className="px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted rounded-lg transition-colors"
             >
               Annuler
@@ -529,8 +589,8 @@ export function StaffScheduleViewer({ staffId, schedules, showForm, onToggleForm
                     key={row.key}
                     className="bg-primary/[0.03] px-4 py-4 space-y-3"
                   >
-                    {/* Row 1: Jour / Période / Département */}
-                    <div className="grid grid-cols-3 gap-2">
+                    {/* Row 1: Jour / Période */}
+                    <div className="grid grid-cols-2 gap-2">
                       <div>
                         <label className="block text-[10px] font-medium text-muted-foreground mb-1">Jour</label>
                         <CustomSelect
@@ -553,6 +613,25 @@ export function StaffScheduleViewer({ staffId, schedules, showForm, onToggleForm
                           className="w-full"
                         />
                       </div>
+                    </div>
+
+                    {/* Row 2: Site / Département */}
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-[10px] font-medium text-muted-foreground mb-1">Site</label>
+                        <CustomSelect
+                          value={editSite ? String(editSite) : ""}
+                          onChange={(v) => {
+                            setEditSite(v ? Number(v) : "");
+                            setEditDept("");
+                            setEditActivity("");
+                          }}
+                          options={siteOptions}
+                          placeholder="Site"
+                          size="compact"
+                          className="w-full"
+                        />
+                      </div>
                       <div>
                         <label className="block text-[10px] font-medium text-muted-foreground mb-1">Département</label>
                         <CustomSelect
@@ -561,8 +640,8 @@ export function StaffScheduleViewer({ staffId, schedules, showForm, onToggleForm
                             setEditDept(v ? Number(v) : "");
                             setEditActivity("");
                           }}
-                          options={deptOptionsShort}
-                          placeholder="Département"
+                          options={editDeptOptions}
+                          placeholder={editSite ? "Département" : "Sélectionner un site"}
                           size="compact"
                           className="w-full"
                         />
@@ -628,37 +707,49 @@ export function StaffScheduleViewer({ staffId, schedules, showForm, onToggleForm
                       </div>
                     </div>
 
+                    {/* Error banner */}
+                    {editError && (
+                      <div className="rounded-lg bg-destructive/10 border border-destructive/30 px-3 py-2 text-sm text-destructive">
+                        {editError}
+                      </div>
+                    )}
+
                     {/* Actions */}
                     <div className="flex gap-1.5 justify-end">
                       <button
-                        onClick={cancelEdit}
+                        onClick={() => { cancelEdit(); setEditError(null); }}
                         className="p-1.5 text-muted-foreground hover:bg-muted rounded-lg transition-colors"
                       >
                         <X className="w-4 h-4" />
                       </button>
                       <button
                         onClick={async () => {
-                          if (isMerged) {
-                            for (const entry of row.entries) {
-                              await updateSchedule.mutateAsync({
-                                staffId,
-                                scheduleId: entry.id_schedule,
-                                data: {
-                                  day_of_week: editDay,
-                                  period: entry.period,
-                                  schedule_type: editType,
-                                  id_department: editDept as number,
-                                  id_recurrence: editRecurrence ? (editRecurrence as number) : null,
-                                  week_offset: editRecurrence ? editWeekOffset : null,
-                                  start_date: editStartDate || null,
-                                  end_date: editEndDate || null,
-                                  id_activity: editActivity ? (editActivity as number) : null,
-                                },
-                              });
+                          setEditError(null);
+                          try {
+                            if (isMerged) {
+                              for (const entry of row.entries) {
+                                await updateSchedule.mutateAsync({
+                                  staffId,
+                                  scheduleId: entry.id_schedule,
+                                  data: {
+                                    day_of_week: editDay,
+                                    period: entry.period,
+                                    schedule_type: editType,
+                                    id_department: editDept as number,
+                                    id_recurrence: editRecurrence ? (editRecurrence as number) : defaultRecurrenceId,
+                                    week_offset: editRecurrence ? editWeekOffset : 0,
+                                    start_date: editStartDate || null,
+                                    end_date: editEndDate || null,
+                                    id_activity: editActivity ? (editActivity as number) : null,
+                                  },
+                                });
+                              }
+                              setEditingId(null);
+                            } else {
+                              handleUpdate();
                             }
-                            setEditingId(null);
-                          } else {
-                            handleUpdate();
+                          } catch (err) {
+                            setEditError(err instanceof Error ? err.message : "Erreur inconnue");
                           }
                         }}
                         disabled={!editDept || updateSchedule.isPending}

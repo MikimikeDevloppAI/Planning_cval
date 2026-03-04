@@ -18,6 +18,8 @@ import {
   createActivityRequirement as createReqQuery,
   updateActivityRequirement as updateReqQuery,
   deleteActivityRequirement as deleteReqQuery,
+  createSkill as createSkillQuery,
+  createRole as createRoleQuery,
 } from "@/lib/supabase/queries";
 import {
   Building2,
@@ -27,6 +29,8 @@ import {
   X,
   Loader2,
   Scissors,
+  Layers,
+  Activity,
 } from "lucide-react";
 
 type Tab = "consultation" | "operations";
@@ -52,7 +56,7 @@ interface Tier {
 interface SiteOption {
   id_site: number;
   name: string;
-  departments: { id_department: number; name: string }[];
+  departments: { id_department: number; name: string; is_active: boolean }[];
 }
 
 interface SkillOption {
@@ -87,6 +91,49 @@ interface DeptData {
   siteName: string;
   lines: TierLine[];
   doctorCounts: number[];
+}
+
+// ── Stat Card ────────────────────────────────────────────
+
+function NeedsStatCard({
+  icon: Icon,
+  label,
+  value,
+  color,
+}: {
+  icon: React.ElementType;
+  label: string;
+  value: number;
+  color: string;
+}) {
+  return (
+    <div
+      className={cn(
+        "relative overflow-hidden rounded-2xl p-4",
+        "bg-card border border-border/40",
+        "shadow-[0_1px_3px_rgba(0,0,0,0.04)]",
+        "hover:shadow-[0_8px_20px_rgba(0,0,0,0.06)]",
+        "transition-all duration-300 group"
+      )}
+    >
+      <div
+        className="absolute -top-6 -right-6 w-20 h-20 rounded-full blur-2xl group-hover:opacity-[0.12] transition-opacity"
+        style={{ backgroundColor: color, opacity: 0.08 }}
+      />
+      <div className="relative flex items-center gap-3">
+        <div
+          className="p-2.5 rounded-xl text-white shadow-sm"
+          style={{ backgroundColor: color }}
+        >
+          <Icon className="w-5 h-5" />
+        </div>
+        <div>
+          <p className="text-xs text-muted-foreground font-medium">{label}</p>
+          <p className="text-2xl font-bold" style={{ color }}>{value}</p>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // ── Component ────────────────────────────────────────────
@@ -189,12 +236,18 @@ export function NeedsView() {
   // ── Build department data ───────────────────────────
 
   const deptData = useMemo<DeptData[]>(() => {
+    // Exclude virtual departments (Bloc opératoire, Administration)
+    const EXCLUDED_DEPTS = new Set(["Bloc opératoire", "Administration"]);
+
     const deptMap = new Map<
       number,
       { name: string; siteName: string; tiers: Tier[] }
     >();
 
     for (const tier of tiers) {
+      const deptName = tier.departments?.name ?? `Dept #${tier.id_department}`;
+      if (EXCLUDED_DEPTS.has(deptName)) continue;
+
       if (!deptMap.has(tier.id_department)) {
         const siteName =
           tier.departments?.sites &&
@@ -203,12 +256,30 @@ export function NeedsView() {
             ? (tier.departments.sites as { name: string }).name
             : "";
         deptMap.set(tier.id_department, {
-          name: tier.departments?.name ?? `Dept #${tier.id_department}`,
+          name: deptName,
           siteName,
           tiers: [],
         });
       }
       deptMap.get(tier.id_department)!.tiers.push(tier);
+    }
+
+    // Include all active departments from sites (even those without tiers)
+    const filteredSites = siteFilter
+      ? sites.filter((s) => s.id_site === parseInt(siteFilter))
+      : sites;
+
+    for (const site of filteredSites) {
+      for (const dept of site.departments) {
+        if (EXCLUDED_DEPTS.has(dept.name)) continue;
+        if (dept.is_active && !deptMap.has(dept.id_department)) {
+          deptMap.set(dept.id_department, {
+            name: dept.name,
+            siteName: site.name,
+            tiers: [],
+          });
+        }
+      }
     }
 
     const result: DeptData[] = [];
@@ -254,7 +325,7 @@ export function NeedsView() {
     }
 
     return result.sort((a, b) => a.deptName.localeCompare(b.deptName));
-  }, [tiers]);
+  }, [tiers, sites, siteFilter]);
 
   // ── Group requirements by activity ──────────────────
 
@@ -381,6 +452,26 @@ export function NeedsView() {
     },
   });
 
+  const createSkillMut = useMutation({
+    mutationFn: ({ name, category }: { name: string; category: string }) =>
+      createSkillQuery(supabase, name, category),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["config", "skills"] });
+      const newId = String((data as { id_skill: number }).id_skill);
+      if (addingDept !== null) setAddSkill(newId);
+      if (addingReqFor !== null) setAddReqSkill(newId);
+    },
+  });
+
+  const createRoleMut = useMutation({
+    mutationFn: (name: string) => createRoleQuery(supabase, name),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["config", "roles"] });
+      const newId = String((data as { id_role: number }).id_role);
+      if (addingDept !== null) setAddRole(newId);
+    },
+  });
+
   // ── Handlers ─────────────────────────────────────────
 
   function handleDelete() {
@@ -396,6 +487,14 @@ export function NeedsView() {
     deleteReqMut.isPending ||
     deleteActivityMut.isPending;
 
+  // Stats
+  const statsNeeds = useMemo(() => {
+    const totalDepts = deptData.length;
+    const totalTiers = tiersRaw?.length ?? 0;
+    const totalOps = activities.length;
+    return { totalDepts, totalTiers, totalOps };
+  }, [deptData, tiersRaw, activities]);
+
   if (tiersLoading || reqsLoading) {
     return (
       <div className="flex items-center justify-center py-20 text-muted-foreground">
@@ -407,6 +506,13 @@ export function NeedsView() {
 
   return (
     <div className="space-y-5">
+      {/* ━━━ Stats ━━━ */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <NeedsStatCard icon={Building2} label="Départements" value={statsNeeds.totalDepts} color="#4A6FA5" />
+        <NeedsStatCard icon={Layers} label="Paliers configurés" value={statsNeeds.totalTiers} color="#6B8A7A" />
+        <NeedsStatCard icon={Activity} label="Opérations" value={statsNeeds.totalOps} color="#9B7BA8" />
+      </div>
+
       {/* ━━━ Toolbar unifiée ━━━ */}
       <div className="flex items-center gap-3 bg-card rounded-xl border border-border/50 shadow-subtle px-4 py-2.5">
         {/* Tabs */}
@@ -663,6 +769,9 @@ export function NeedsView() {
                           }))}
                           placeholder="Compétence..."
                           className="w-full"
+                          onCreate={(name) => createSkillMut.mutate({ name, category: "consultation" })}
+                          createLabel="Nouvelle compétence..."
+                          isCreating={createSkillMut.isPending}
                         />
                       </td>
                       <td className="px-3 py-2">
@@ -675,6 +784,9 @@ export function NeedsView() {
                           }))}
                           placeholder="Rôle..."
                           className="w-full"
+                          onCreate={(name) => createRoleMut.mutate(name)}
+                          createLabel="Nouveau rôle..."
+                          isCreating={createRoleMut.isPending}
                         />
                       </td>
                       <td className="text-center px-3 py-2">
@@ -901,6 +1013,9 @@ export function NeedsView() {
                           }))}
                           placeholder="Compétence..."
                           className="w-full"
+                          onCreate={(name) => createSkillMut.mutate({ name, category: "chirurgie" })}
+                          createLabel="Nouvelle compétence..."
+                          isCreating={createSkillMut.isPending}
                         />
                       </div>
                       <input
@@ -1054,6 +1169,9 @@ export function NeedsView() {
                           }))}
                           placeholder="Compétence..."
                           className="w-full"
+                          onCreate={(name) => createSkillMut.mutate({ name, category: "chirurgie" })}
+                          createLabel="Nouvelle compétence..."
+                          isCreating={createSkillMut.isPending}
                         />
                       </div>
                       <input

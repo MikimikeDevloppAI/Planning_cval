@@ -5,7 +5,7 @@ import { useAppStore } from "@/store/use-app-store";
 import { useQueryClient } from "@tanstack/react-query";
 import { format, startOfISOWeek, addWeeks, endOfMonth, isBefore } from "date-fns";
 import { fr } from "date-fns/locale";
-import { X, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
+import { X, Loader2, CheckCircle2, AlertCircle, Cpu } from "lucide-react";
 
 /**
  * Get all Monday dates that cover the given month.
@@ -87,10 +87,15 @@ export function SolverDialog() {
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
       <div className="bg-card rounded-xl shadow-xl w-full max-w-sm p-6 border border-border/50">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-foreground">
-            Optimiser le planning
-          </h3>
+        <div className="flex items-center justify-between mb-5">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 rounded-lg bg-primary/10">
+              <Cpu className="w-5 h-5 text-primary" />
+            </div>
+            <h3 className="text-base font-semibold text-foreground">
+              Optimiser le planning
+            </h3>
+          </div>
           <button onClick={handleClose} className="text-muted-foreground hover:text-foreground transition-colors">
             <X className="w-5 h-5" />
           </button>
@@ -132,17 +137,17 @@ export function SolverDialog() {
           </div>
         )}
 
-        <div className="flex gap-2 justify-end pt-2">
+        <div className="flex gap-2 justify-end pt-4">
           <button
             onClick={handleClose}
-            className="px-4 py-2 text-sm rounded-xl border border-border/50 text-foreground hover:bg-muted/50 transition-colors"
+            className="px-4 py-2 text-sm rounded-lg border border-border/50 text-foreground hover:bg-muted/50 transition-colors"
           >
             {status === "idle" ? "Annuler" : "Fermer"}
           </button>
           {status === "idle" && (
             <button
               onClick={handleRun}
-              className="px-4 py-2 text-sm rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-md shadow-primary/20"
+              className="px-4 py-2 text-sm rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
             >
               Lancer le solveur
             </button>

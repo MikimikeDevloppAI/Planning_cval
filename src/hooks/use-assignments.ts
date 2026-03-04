@@ -6,9 +6,11 @@ import {
   moveAssignment as moveAssignmentQuery,
   moveDoctorSchedule as moveDoctorScheduleQuery,
   cancelAssignment as cancelAssignmentQuery,
+  reassignToAdmin as reassignToAdminQuery,
   updateAssignmentStatus as updateAssignmentStatusQuery,
   updateAssignmentSkill as updateAssignmentSkillQuery,
   swapAssignments as swapAssignmentsQuery,
+  addManualAssignment as addManualAssignmentQuery,
 } from "@/lib/supabase/queries";
 import type { PlanningData, PlanningAssignment } from "@/lib/types/database";
 
@@ -78,15 +80,18 @@ function addAssignment(data: PlanningData, blockId: number, assignment: Planning
   };
 }
 
-/** Find a block in the cache by dept + date + period.
+/** Find a block in the cache by dept + date + period + optional room.
  *  First tries matching by dept.id_department, then falls back to
  *  matching by block.id_department (handles virtual depts like Administration
- *  where dept.id_department=-2000 but blocks have the real id like 8). */
+ *  where dept.id_department=-2000 but blocks have the real id like 8).
+ *  For surgery rooms: when roomId is provided, dept.id_department is the roomId
+ *  (since extractVirtualSites maps rooms as departments). */
 function findBlockId(
   data: PlanningData,
   deptId: number,
   date: string,
-  period: "AM" | "PM"
+  period: "AM" | "PM",
+  roomId?: number | null,
 ): number | null {
   for (const site of data.sites) {
     for (const dept of site.departments) {
@@ -94,6 +99,10 @@ function findBlockId(
       for (const day of dept.days) {
         if (day.date !== date) continue;
         const periodData = period === "AM" ? day.am : day.pm;
+        if (roomId) {
+          const roomBlock = periodData.blocks.find((b) => b.id_room === roomId);
+          if (roomBlock) return roomBlock.id_block;
+        }
         const medical = periodData.blocks.find((b) => b.block_type !== "ADMIN");
         return (medical ?? periodData.blocks[0])?.id_block ?? null;
       }
@@ -105,6 +114,10 @@ function findBlockId(
       for (const day of dept.days) {
         if (day.date !== date) continue;
         const periodData = period === "AM" ? day.am : day.pm;
+        if (roomId) {
+          const roomBlock = periodData.blocks.find((b) => b.id_room === roomId);
+          if (roomBlock) return roomBlock.id_block;
+        }
         const match = periodData.blocks.find((b) => b.id_department === deptId);
         if (match) return match.id_block;
       }
@@ -152,6 +165,7 @@ function rollbackQueries(
 interface MoveAssignmentParams {
   oldAssignmentId: number;
   targetDeptId: number;
+  targetRoomId?: number | null;
   targetDate: string;
   period: "AM" | "PM";
   staffId: number;
@@ -167,6 +181,7 @@ interface MoveDoctorScheduleParams {
   staffId: number;
   sourceAssignmentId: number;
   targetDeptId: number;
+  targetRoomId?: number | null;
   targetDate: string;
   period: "AM" | "PM";
   activityId?: number | null;
@@ -195,6 +210,7 @@ export function useMoveAssignment() {
       moveAssignmentQuery(supabase, {
         oldAssignmentId: params.oldAssignmentId,
         targetDeptId: params.targetDeptId,
+        targetRoomId: params.targetRoomId ?? null,
         targetDate: params.targetDate,
         period: params.period,
         staffId: params.staffId,
@@ -213,7 +229,7 @@ export function useMoveAssignment() {
       const targetBlockId = (() => {
         for (const [, data] of queryClient.getQueriesData<PlanningData>({ queryKey: ["planning"] })) {
           if (!data) continue;
-          const id = findBlockId(data, params.targetDeptId, params.targetDate, params.period);
+          const id = findBlockId(data, params.targetDeptId, params.targetDate, params.period, params.targetRoomId);
           if (id) return id;
         }
         return null;
@@ -275,7 +291,7 @@ export function useMoveDoctorSchedule() {
         let updated = removeAssignment(data, params.sourceAssignmentId);
 
         // Find target block in the cache
-        const targetBlockId = findBlockId(data, params.targetDeptId, params.targetDate, params.period);
+        const targetBlockId = findBlockId(data, params.targetDeptId, params.targetDate, params.period, params.targetRoomId);
         if (targetBlockId) {
           const [firstname, ...lastParts] = params.personName.split(" ");
           const lastname = lastParts.join(" ");
@@ -341,6 +357,41 @@ export function useCancelAssignment() {
   });
 }
 
+interface ReassignToAdminParams {
+  assignmentId: number;
+  staffId: number;
+  date: string;
+  period: "AM" | "PM";
+}
+
+export function useReassignToAdmin() {
+  const queryClient = useQueryClient();
+  const supabase = createClient();
+
+  return useMutation({
+    mutationFn: (params: ReassignToAdminParams) =>
+      reassignToAdminQuery(supabase, params),
+    onMutate: async (params) => {
+      await queryClient.cancelQueries({ queryKey: ["planning"] });
+      const snapshots = snapshotQueries(queryClient);
+
+      // Optimistic: remove from current position (will appear in admin after refetch)
+      for (const [key, data] of queryClient.getQueriesData<PlanningData>({ queryKey: ["planning"] })) {
+        if (!data) continue;
+        queryClient.setQueryData(key, removeAssignment(data, params.assignmentId));
+      }
+
+      return { snapshots };
+    },
+    onError: (_err, _params, context) => {
+      if (context?.snapshots) rollbackQueries(queryClient, context.snapshots);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["planning"] });
+    },
+  });
+}
+
 export function useUpdateAssignmentStatus() {
   const queryClient = useQueryClient();
   const supabase = createClient();
@@ -364,6 +415,7 @@ interface SwapAssignmentSide {
   type: string;
   roleId: number | null;
   skillId: number | null;
+  activityId?: number | null;
 }
 
 interface SwapAssignmentsParams {
@@ -401,6 +453,33 @@ export function useUpdateAssignmentSkill() {
       updateAssignmentSkillQuery(supabase, params.assignmentId, params.skillId, params.linkedDoctorId),
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["planning"] });
+    },
+  });
+}
+
+// ── Add manual assignment ─────────────────────────────────
+
+interface AddManualAssignmentParams {
+  staffId: number;
+  idPrimaryPosition: 1 | 2 | 3;
+  targetDeptId: number;
+  targetRoomId?: number | null;
+  targetDate: string;
+  period: "AM" | "PM";
+  roleId?: number | null;
+  activityId?: number | null;
+}
+
+export function useAddManualAssignment() {
+  const queryClient = useQueryClient();
+  const supabase = createClient();
+
+  return useMutation({
+    mutationFn: (params: AddManualAssignmentParams) =>
+      addManualAssignmentQuery(supabase, params),
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["planning"] });
+      queryClient.invalidateQueries({ queryKey: ["staff"] });
     },
   });
 }

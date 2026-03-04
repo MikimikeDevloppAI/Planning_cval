@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { buildAbsentKeys, buildSiteMap, buildNeedsIndex, computeStats } from "./planning";
+import type { StaffingNeed } from "@/lib/types/database";
 
 // ── buildAbsentKeys ──────────────────────────────────────
 
@@ -71,11 +72,15 @@ describe("buildSiteMap", () => {
     period: "AM",
     block_type: "CONSULTATION",
     id_department: overrides.id_department ?? 10,
+    id_room: null as number | null,
+    id_activity: null as number | null,
     departments: {
       name: overrides.deptName ?? "Ophtalmologie",
       id_site: overrides.siteId ?? 100,
       sites: { name: overrides.siteName ?? "Clinique la Vallée" },
     },
+    rooms: null as { name: string } | null,
+    activity_templates: null as { name: string } | null,
     assignments: [],
   });
 
@@ -118,7 +123,7 @@ describe("buildNeedsIndex", () => {
       { id_block: 1, needed: 2, assigned: 1, gap: 1 },
       { id_block: 1, needed: 1, assigned: 0, gap: 1 },
       { id_block: 2, needed: 3, assigned: 3, gap: 0 },
-    ] as Array<{ id_block: number; needed: number; assigned: number; gap: number }>;
+    ] as unknown as StaffingNeed[];
     const index = buildNeedsIndex(needs);
     expect(index.get(1)).toHaveLength(2);
     expect(index.get(2)).toHaveLength(1);
@@ -137,7 +142,7 @@ describe("computeStats", () => {
     const needs = [
       { id_block: 1, needed: 3, assigned: 2, gap: 1 },
       { id_block: 2, needed: 2, assigned: 2, gap: 0 },
-    ] as Array<{ id_block: number; needed: number; assigned: number; gap: number }>;
+    ] as unknown as StaffingNeed[];
     const stats = computeStats([], needs);
     expect(stats.totalNeeds).toBe(5);
     expect(stats.filled).toBe(4);
@@ -152,7 +157,11 @@ describe("computeStats", () => {
         period: "AM",
         block_type: "CONSULTATION",
         id_department: 10,
+        id_room: null as number | null,
+        id_activity: null as number | null,
         departments: { name: "Oph", id_site: 1, sites: { name: "S" } },
+        rooms: null as { name: string } | null,
+        activity_templates: null as { name: string } | null,
         assignments: [
           { id_assignment: 1, assignment_type: "SECRETARY", status: "PROPOSED", id_staff: 1, id_role: 1, id_skill: null, id_activity: null, id_linked_doctor: null, source: "SOLVER", id_schedule: null, staff: { firstname: "A", lastname: "B", id_primary_position: 2 }, secretary_roles: null, skills: null, activity_templates: null },
           { id_assignment: 2, assignment_type: "SECRETARY", status: "CONFIRMED", id_staff: 2, id_role: 1, id_skill: null, id_activity: null, id_linked_doctor: null, source: "SOLVER", id_schedule: null, staff: { firstname: "C", lastname: "D", id_primary_position: 2 }, secretary_roles: null, skills: null, activity_templates: null },
@@ -171,7 +180,7 @@ describe("computeStats", () => {
   it("ignores negative gaps", () => {
     const needs = [
       { id_block: 1, needed: 1, assigned: 2, gap: -1 },
-    ] as Array<{ id_block: number; needed: number; assigned: number; gap: number }>;
+    ] as unknown as StaffingNeed[];
     const stats = computeStats([], needs);
     expect(stats.gaps).toBe(0);
   });

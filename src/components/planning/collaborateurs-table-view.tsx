@@ -8,6 +8,9 @@ import { getInitials } from "@/lib/utils/initials";
 import { POSITION_LABELS, ROLE_TAG, PERIOD_LABELS, PERIOD_ORDER } from "@/lib/constants";
 import { weekSepStyle, abbreviateSite, abbreviateDept } from "@/lib/utils/planning-helpers";
 import type { LeaveEntry } from "@/lib/types/planning-views";
+import { Plus } from "lucide-react";
+import { AddAssignmentDialog } from "@/components/dialogs/add-assignment-dialog";
+import { AssignmentActionMenu } from "@/components/planning/assignment-action-menu";
 import type { PlanningSite, PlanningAssignment } from "@/lib/types/database";
 
 type FilterType = "tous" | "medecins" | "secretaires";
@@ -31,6 +34,9 @@ interface PersonDay {
   blockType: string | null;
   activityName: string | null;
   assignmentType: string;
+  source: string;
+  id_assignment: number;
+  pm_id_assignment?: number;
 }
 
 interface CollaborateurData {
@@ -50,6 +56,22 @@ export function CollaborateursTableView({
   const scrollRef = useRef<HTMLDivElement>(null);
   const [filter, setFilter] = useState<FilterType>("tous");
   const [highlightedId, setHighlightedId] = useState<number | null>(null);
+  const [addDialog, setAddDialog] = useState<{
+    staffId: number;
+    staffName: string;
+    idPrimaryPosition: 1 | 2 | 3;
+    date: string;
+  } | null>(null);
+  const [actionMenu, setActionMenu] = useState<{
+    staffId: number;
+    staffName: string;
+    staffType: "DOCTOR" | "SECRETARY";
+    date: string;
+    period: "AM" | "PM" | "FULL_DAY";
+    assignmentId: number;
+    pmAssignmentId?: number;
+    anchor: DOMRect;
+  } | null>(null);
 
   const toggleHighlight = useCallback((id: number) => {
     setHighlightedId((prev) => (prev === id ? null : id));
@@ -114,6 +136,8 @@ export function CollaborateursTableView({
                   (sameDept.period === "AM" && period === "PM") ||
                   (sameDept.period === "PM" && period === "AM")
                 ) {
+                  sameDept.pm_id_assignment = period === "PM" ? a.id_assignment : sameDept.id_assignment;
+                  if (period === "AM") sameDept.id_assignment = a.id_assignment;
                   sameDept.period = "FULL_DAY";
                 }
               } else {
@@ -127,6 +151,8 @@ export function CollaborateursTableView({
                   blockType: block.block_type ?? null,
                   activityName: block.activity_name ?? null,
                   assignmentType: a.assignment_type,
+                  source: a.source,
+                  id_assignment: a.id_assignment,
                 });
               }
             }
@@ -311,7 +337,7 @@ export function CollaborateursTableView({
                       <td
                         key={dateStr}
                         className={cn(
-                          "px-1 py-1 align-top border-b border-r border-slate-200 min-w-[130px]",
+                          "px-1 py-1 align-top border-b border-r border-slate-200 min-w-[130px] group/cell",
                           leaveType === "FULL" && "bg-red-50/40",
                           today && !leaveType && "bg-sky-50/30"
                         )}
@@ -345,19 +371,45 @@ export function CollaborateursTableView({
                                   ? "admin"
                                   : "secretary";
 
+                            const isBlocDept = a.deptName.toLowerCase().includes("bloc");
+                            const badgeLabel = isBlocDept
+                              ? "Bloc"
+                              : abbreviateSite(a.siteName);
+                            const badgeSub = isBlocDept
+                              ? (a.activityName ? abbreviateDept(a.activityName) : "")
+                              : abbreviateDept(a.deptName);
+
                             return (
                               <Badge
                                 key={i}
-                                label={abbreviateSite(a.siteName)}
-                                sub={abbreviateDept(a.deptName)}
+                                label={badgeLabel}
+                                sub={badgeSub}
                                 tag={roleTag}
                                 variant={variant}
                                 period={a.period}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setActionMenu({
+                                    staffId: collab.id_staff,
+                                    staffName: `${collab.firstname} ${collab.lastname}`,
+                                    staffType: a.assignmentType === "SECRETARY" ? "SECRETARY" : "DOCTOR",
+                                    date: dateStr,
+                                    period: a.period,
+                                    assignmentId: a.id_assignment,
+                                    pmAssignmentId: a.pm_id_assignment,
+                                    anchor: e.currentTarget.getBoundingClientRect(),
+                                  });
+                                }}
                                 tooltip={
                                   <div>
                                     <div className="font-semibold text-sm">{collab.firstname} {collab.lastname}</div>
                                     <div className="text-slate-300 mt-0.5">{a.siteName}</div>
                                     <div className="text-slate-400 mt-0.5">{a.deptName}</div>
+                                    {a.activityName && (
+                                      <div className="text-emerald-300 mt-0.5 text-[10px]">
+                                        Intervention : {a.activityName}
+                                      </div>
+                                    )}
                                     <div className="flex items-center gap-1.5 mt-1">
                                       {(a.period === "AM" || a.period === "FULL_DAY") && (
                                         <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
@@ -377,6 +429,23 @@ export function CollaborateursTableView({
                               />
                             );
                           })}
+                          {sorted.length === 0 && !leaveType && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setAddDialog({
+                                  staffId: collab.id_staff,
+                                  staffName: `${collab.firstname} ${collab.lastname}`,
+                                  idPrimaryPosition: collab.position as 1 | 2 | 3,
+                                  date: dateStr,
+                                });
+                              }}
+                              className="opacity-0 group-hover/cell:opacity-100 w-full h-5 flex items-center justify-center text-slate-300 hover:text-primary hover:bg-primary/5 rounded transition-all"
+                              title="Ajouter une assignation"
+                            >
+                              <Plus className="w-3 h-3" />
+                            </button>
+                          )}
                         </div>
                       </td>
                     );
@@ -387,6 +456,31 @@ export function CollaborateursTableView({
           </tbody>
         </table>
       </div>
+
+      {addDialog && (
+        <AddAssignmentDialog
+          open
+          onClose={() => setAddDialog(null)}
+          staffId={addDialog.staffId}
+          staffName={addDialog.staffName}
+          idPrimaryPosition={addDialog.idPrimaryPosition}
+          defaultDate={addDialog.date}
+        />
+      )}
+
+      <AssignmentActionMenu
+        open={actionMenu !== null}
+        anchor={actionMenu?.anchor ?? null}
+        onClose={() => setActionMenu(null)}
+        staffId={actionMenu?.staffId ?? 0}
+        staffName={actionMenu?.staffName ?? ""}
+        staffType={actionMenu?.staffType ?? "DOCTOR"}
+        date={actionMenu?.date ?? ""}
+        period={actionMenu?.period ?? "AM"}
+        assignmentId={actionMenu?.assignmentId ?? 0}
+        pmAssignmentId={actionMenu?.pmAssignmentId}
+        showProfile
+      />
     </div>
   );
 }
@@ -409,6 +503,7 @@ function Badge({
   variant = "admin",
   period,
   tooltip,
+  onClick,
 }: {
   label: string;
   sub: string;
@@ -416,6 +511,7 @@ function Badge({
   variant?: BadgeVariant;
   period: "AM" | "PM" | "FULL_DAY";
   tooltip: React.ReactNode;
+  onClick?: (e: React.MouseEvent) => void;
 }) {
   const isAM = period === "AM";
   const isPM = period === "PM";
@@ -423,7 +519,10 @@ function Badge({
   const vi = VARIANT_INLINE[variant];
 
   return (
-    <div className="relative group/badge">
+    <div
+      className={cn("relative group/badge", onClick && "cursor-pointer")}
+      onClick={onClick}
+    >
       <div
         className={cn(
           "relative flex items-center gap-1 h-6 rounded-lg overflow-hidden",

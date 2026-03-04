@@ -23,6 +23,7 @@ import { getInitials } from "@/lib/utils/initials";
 import { useAllLeaves, useAddLeave, useRemoveLeave, useUpdateLeave, useStaffList } from "@/hooks/use-staff";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { CustomSelect } from "@/components/ui/custom-select";
+import { AbsenceHeatmap } from "./absence-heatmap";
 
 // ── Types ────────────────────────────────────────────────
 
@@ -83,17 +84,29 @@ function StatCard({
   color: string;
 }) {
   return (
-    <div className="bg-card rounded-2xl border border-border/40 shadow-sm overflow-hidden">
-      <div className="flex items-center gap-4 p-5">
+    <div
+      className={cn(
+        "relative overflow-hidden rounded-2xl p-4",
+        "bg-card border border-border/40",
+        "shadow-[0_1px_3px_rgba(0,0,0,0.04)]",
+        "hover:shadow-[0_8px_20px_rgba(0,0,0,0.06)]",
+        "transition-all duration-300 group"
+      )}
+    >
+      <div
+        className="absolute -top-6 -right-6 w-20 h-20 rounded-full blur-2xl group-hover:opacity-[0.12] transition-opacity"
+        style={{ backgroundColor: color, opacity: 0.08 }}
+      />
+      <div className="relative flex items-center gap-3">
         <div
-          className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0"
-          style={{ backgroundColor: `${color}15` }}
+          className="p-2.5 rounded-xl text-white shadow-sm"
+          style={{ backgroundColor: color }}
         >
-          <Icon className="w-5.5 h-5.5" style={{ color }} />
+          <Icon className="w-5 h-5" />
         </div>
         <div>
-          <p className="text-2xl font-bold text-foreground">{value}</p>
-          <p className="text-sm text-muted-foreground">{label}</p>
+          <p className="text-xs text-muted-foreground font-medium">{label}</p>
+          <p className="text-2xl font-bold" style={{ color }}>{value}</p>
         </div>
       </div>
     </div>
@@ -104,13 +117,13 @@ function StatCard({
 
 function StatusBadge({ status }: { status: "past" | "current" | "upcoming" }) {
   const config = {
-    past: { label: "Terminée", bg: "bg-muted", text: "text-muted-foreground", dot: "bg-slate-400" },
-    current: { label: "En cours", bg: "bg-amber-50", text: "text-amber-700", dot: "bg-amber-500" },
-    upcoming: { label: "À venir", bg: "bg-blue-50", text: "text-blue-700", dot: "bg-blue-500" },
+    past: { label: "Terminée", classes: "bg-slate-50 text-slate-500 border border-slate-200/60", dot: "bg-slate-400" },
+    current: { label: "En cours", classes: "bg-amber-50 text-amber-700 border border-amber-200/60", dot: "bg-amber-500 animate-pulse-dot" },
+    upcoming: { label: "À venir", classes: "bg-blue-50 text-blue-700 border border-blue-200/60", dot: "bg-blue-500" },
   }[status];
 
   return (
-    <span className={cn("inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium", config.bg, config.text)}>
+    <span className={cn("inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium", config.classes)}>
       <span className={cn("w-1.5 h-1.5 rounded-full", config.dot)} />
       {config.label}
     </span>
@@ -328,10 +341,13 @@ export function AbsencesView() {
     <div className="space-y-6">
       {/* ── Stats ────────────────────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <StatCard icon={UserMinus} label="Absents aujourd'hui" value={stats.todayCount} color="#E8590C" />
-        <StatCard icon={Calendar} label="Ce mois" value={stats.monthCount} color="#4A6FA5" />
-        <StatCard icon={CalendarClock} label="À venir" value={stats.upcomingCount} color="#2B8A3E" />
+        <StatCard icon={UserMinus} label="Absents aujourd'hui" value={stats.todayCount} color="#4A6FA5" />
+        <StatCard icon={Calendar} label="Ce mois" value={stats.monthCount} color="#6B8A7A" />
+        <StatCard icon={CalendarClock} label="À venir" value={stats.upcomingCount} color="#9B7BA8" />
       </div>
+
+      {/* ── Weekly Heatmap ─────────────────────────────── */}
+      <AbsenceHeatmap leaves={allLeaves} />
 
       {/* ── Toolbar ────────────────────────────────────── */}
       <div className="flex flex-wrap items-center gap-3 bg-card rounded-xl border border-border/50 shadow-subtle px-4 py-2">
@@ -432,7 +448,7 @@ export function AbsencesView() {
                   setAddStart(e.target.value);
                   if (!addEnd) setAddEnd(e.target.value);
                 }}
-                className="w-full rounded-xl border border-border/50 bg-muted/30 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all"
+                className="w-full h-[38px] rounded-xl border border-border/50 bg-muted/30 px-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all"
               />
             </div>
             <div>
@@ -441,7 +457,7 @@ export function AbsencesView() {
                 type="date"
                 value={addEnd}
                 onChange={(e) => setAddEnd(e.target.value)}
-                className="w-full rounded-xl border border-border/50 bg-muted/30 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all"
+                className="w-full h-[38px] rounded-xl border border-border/50 bg-muted/30 px-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all"
               />
             </div>
             <div>
@@ -486,7 +502,7 @@ export function AbsencesView() {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
           {filtered.map((leave) => {
             const staff = leave.staff;
             if (!staff) return null;
@@ -501,37 +517,37 @@ export function AbsencesView() {
               return (
                 <div
                   key={leave.id_absence}
-                  className="bg-card rounded-2xl border-2 border-primary/30 shadow-sm overflow-hidden"
+                  className="bg-card rounded-2xl border-2 border-primary/20 shadow-sm overflow-hidden bg-gradient-to-br from-primary/[0.02] to-transparent flex flex-col"
                 >
-                  <div className="flex items-center gap-3 p-4 pb-3">
-                    <div
-                      className="w-1 self-stretch rounded-full shrink-0 -ml-4 -my-4"
-                      style={{ backgroundColor: colors.hex }}
-                    />
-                    <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center text-sm font-semibold shrink-0", colors.avatar)}>
-                      {initials}
+                  {/* Header */}
+                  <div className="flex items-center justify-between px-3 pt-3 pb-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold shrink-0", colors.avatar)}>
+                        {initials}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold text-foreground truncate">{staff.lastname}</p>
+                        <p className="text-[10px] text-muted-foreground truncate">{staff.firstname}</p>
+                      </div>
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold text-foreground">{staff.firstname} {staff.lastname}</p>
-                      <p className="text-xs text-muted-foreground">{POSITION_LABELS[pos] ?? "—"}</p>
-                    </div>
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-0.5">
                       <button
                         onClick={() => setEditState(null)}
                         className="p-1.5 text-muted-foreground hover:bg-muted rounded-lg transition-colors"
                       >
-                        <X className="w-4 h-4" />
+                        <X className="w-3.5 h-3.5" />
                       </button>
                       <button
                         onClick={() => handleUpdate(leave)}
                         disabled={!editState.start || !editState.end || updateLeave.isPending}
                         className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors disabled:opacity-50"
                       >
-                        <Check className="w-4 h-4" />
+                        <Check className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   </div>
-                  <div className="px-4 pb-4 space-y-2">
+                  {/* Form */}
+                  <div className="px-3 pb-3 space-y-2">
                     <div className="grid grid-cols-2 gap-2">
                       <div>
                         <label className="block text-[10px] font-medium text-muted-foreground mb-0.5">Début</label>
@@ -539,7 +555,7 @@ export function AbsencesView() {
                           type="date"
                           value={editState.start}
                           onChange={(e) => setEditState((prev) => prev ? { ...prev, start: e.target.value } : prev)}
-                          className="w-full h-8 rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 hover:border-slate-300 transition-all"
+                          className="w-full h-7 rounded-lg border border-slate-200 bg-white px-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 hover:border-slate-300 transition-all"
                         />
                       </div>
                       <div>
@@ -548,7 +564,7 @@ export function AbsencesView() {
                           type="date"
                           value={editState.end}
                           onChange={(e) => setEditState((prev) => prev ? { ...prev, end: e.target.value } : prev)}
-                          className="w-full h-8 rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 hover:border-slate-300 transition-all"
+                          className="w-full h-7 rounded-lg border border-slate-200 bg-white px-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 hover:border-slate-300 transition-all"
                         />
                       </div>
                     </div>
@@ -571,56 +587,81 @@ export function AbsencesView() {
             return (
               <div
                 key={leave.id_absence}
-                className="group bg-card rounded-2xl border border-border/40 shadow-sm hover:shadow-md hover:border-border/60 transition-all overflow-hidden"
+                className={cn(
+                  "group relative bg-card rounded-2xl border border-border/30 overflow-hidden",
+                  "shadow-card hover:shadow-card-hover",
+                  "transition-all duration-300 ease-out",
+                  "hover:-translate-y-2 hover:border-border/60",
+                  "animate-fade-in-up",
+                  "flex flex-col items-center"
+                )}
               >
-                <div className="flex items-center gap-4 p-4">
-                  {/* Left border color accent */}
+                {/* Gradient header band */}
+                <div
+                  className="h-10 w-full relative overflow-hidden"
+                  style={{
+                    background: `linear-gradient(135deg, ${colors.hex}18, ${colors.hex}08, transparent)`,
+                  }}
+                >
                   <div
-                    className="w-1 self-stretch rounded-full shrink-0 -ml-4 -my-4"
-                    style={{ backgroundColor: colors.hex }}
+                    className="absolute -top-4 -right-4 w-16 h-16 rounded-full"
+                    style={{ backgroundColor: colors.hex, opacity: 0.07 }}
                   />
+                </div>
 
-                  {/* Avatar */}
-                  <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center text-sm font-semibold shrink-0", colors.avatar)}>
+                {/* Avatar — overlapping header */}
+                <div className="-mt-5 relative z-10">
+                  <div
+                    className={cn(
+                      "w-11 h-11 rounded-xl flex items-center justify-center text-sm font-bold",
+                      "ring-2 ring-card shadow-md",
+                      "transition-all duration-300",
+                      "group-hover:shadow-lg group-hover:scale-105",
+                      colors.avatar
+                    )}
+                  >
                     {initials}
                   </div>
+                </div>
 
-                  {/* Name + position */}
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-foreground truncate">
-                      {staff.firstname} {staff.lastname}
-                    </p>
-                    <p className="text-xs text-muted-foreground">{POSITION_LABELS[pos] ?? "—"}</p>
+                {/* Content */}
+                <div className="px-3 pt-2 pb-3 flex flex-col items-center text-center w-full">
+                  <h4 className="text-sm font-bold text-foreground truncate max-w-full leading-tight">
+                    {staff.lastname}
+                  </h4>
+                  <p className="text-xs text-muted-foreground mt-0.5 truncate max-w-full">
+                    {staff.firstname}
+                  </p>
+
+                  {/* Status + Period badges */}
+                  <div className="flex items-center gap-1.5 mt-2">
+                    <StatusBadge status={status} />
+                    <PeriodBadge period={leave.period} />
                   </div>
 
-                  {/* Dates + duration */}
-                  <div className="hidden sm:block text-right min-w-[160px]">
-                    <p className="text-sm font-medium text-foreground">
+                  {/* Date range */}
+                  <div className="mt-2.5 flex items-center gap-1.5">
+                    <Calendar className="w-3 h-3 text-muted-foreground/60 shrink-0" />
+                    <p className="text-[11px] font-medium text-foreground">
                       {formatDateRange(leave.start_date, leave.end_date)}
                     </p>
-                    <p className="text-xs text-muted-foreground">
-                      {days} jour{days > 1 ? "s" : ""}
-                    </p>
                   </div>
+                  <p className="text-[10px] text-muted-foreground">
+                    {days} jour{days > 1 ? "s" : ""}
+                  </p>
 
-                  {/* Period + status badges */}
-                  <div className="hidden md:flex items-center gap-2">
-                    <PeriodBadge period={leave.period} />
-                    <StatusBadge status={status} />
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                  {/* Actions — hover reveal */}
+                  <div className="flex items-center gap-0.5 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button
-                      onClick={() => startEdit(leave)}
-                      className="p-2 text-muted-foreground hover:text-primary hover:bg-primary/5 rounded-lg transition-colors"
+                      onClick={(e) => { e.stopPropagation(); startEdit(leave); }}
+                      className="p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/5 rounded-lg transition-colors"
                       title="Modifier"
                     >
                       <Pencil className="w-3.5 h-3.5" />
                     </button>
                     <button
-                      onClick={() => setConfirmDelete(leave)}
-                      className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/5 rounded-lg transition-colors"
+                      onClick={(e) => { e.stopPropagation(); setConfirmDelete(leave); }}
+                      className="p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/5 rounded-lg transition-colors"
                       title="Supprimer"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -628,14 +669,13 @@ export function AbsencesView() {
                   </div>
                 </div>
 
-                {/* Mobile badges (visible on small screens) */}
-                <div className="sm:hidden px-4 pb-3 flex items-center gap-2 flex-wrap">
-                  <p className="text-xs text-foreground font-medium">
-                    {formatDateRange(leave.start_date, leave.end_date)}
-                  </p>
-                  <PeriodBadge period={leave.period} />
-                  <StatusBadge status={status} />
-                </div>
+                {/* Hover indicator — gradient line at bottom */}
+                <div
+                  className="absolute bottom-0 left-0 right-0 h-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                  style={{
+                    backgroundImage: `linear-gradient(to right, transparent, ${colors.hex}, transparent)`,
+                  }}
+                />
               </div>
             );
           })}

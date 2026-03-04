@@ -149,3 +149,89 @@ export function needsRoleSelection(data: RoleSelectionData): boolean {
 export function slotKey(slot: NeedSlot): string {
   return `${slot.id_role ?? "null"}-${slot.id_skill}`;
 }
+
+// ── Unified slots (needs + assigned people per slot) ────
+
+export interface SlotPerson {
+  id_assignment: number;
+  id_staff: number;
+  firstname: string;
+  lastname: string;
+}
+
+export interface UnifiedSlot extends NeedSlot {
+  people: SlotPerson[];
+}
+
+/**
+ * Build unified slots combining staffing needs with the people already assigned.
+ * Each slot = one (role, skill) pair with its need counts AND the list of people on it.
+ */
+export function buildUnifiedSlots(
+  blocks: PlanningBlock[],
+  needs: StaffingNeed[],
+): UnifiedSlot[] {
+  // 1. Build slots from needs (group by id_role + id_skill)
+  const slotMap = new Map<string, UnifiedSlot>();
+  for (const need of needs) {
+    const key = `${need.id_role ?? "null"}-${need.id_skill}`;
+    const existing = slotMap.get(key);
+    if (existing) {
+      existing.gap += need.gap;
+      existing.needed += need.needed;
+      existing.assigned += need.assigned;
+    } else {
+      slotMap.set(key, {
+        id_role: need.id_role,
+        role_name: need.role_name,
+        id_skill: need.id_skill,
+        skill_name: need.skill_name ?? `Compétence ${need.id_skill}`,
+        gap: need.gap,
+        needed: need.needed,
+        assigned: need.assigned,
+        people: [],
+      });
+    }
+  }
+
+  // 2. Collect non-DOCTOR assignments and match to slots
+  const seen = new Set<number>();
+  for (const block of blocks) {
+    for (const a of block.assignments) {
+      if (a.assignment_type === "DOCTOR" || seen.has(a.id_assignment)) continue;
+      seen.add(a.id_assignment);
+
+      const key = `${a.id_role ?? "null"}-${a.id_skill ?? 0}`;
+      const slot = slotMap.get(key);
+      const person: SlotPerson = {
+        id_assignment: a.id_assignment,
+        id_staff: a.id_staff,
+        firstname: a.firstname,
+        lastname: a.lastname,
+      };
+
+      if (slot) {
+        slot.people.push(person);
+      } else {
+        // Assignment doesn't match any known need → create ad-hoc slot
+        slotMap.set(key, {
+          id_role: a.id_role,
+          role_name: a.role_name,
+          id_skill: a.id_skill ?? 0,
+          skill_name: a.skill_name ?? "—",
+          gap: 0,
+          needed: 0,
+          assigned: 1,
+          people: [person],
+        });
+      }
+    }
+  }
+
+  // 3. Sort: gap > 0 first, then by role id
+  return Array.from(slotMap.values()).sort((a, b) => {
+    if (a.gap > 0 && b.gap <= 0) return -1;
+    if (a.gap <= 0 && b.gap > 0) return 1;
+    return (a.id_role ?? 0) - (b.id_role ?? 0);
+  });
+}

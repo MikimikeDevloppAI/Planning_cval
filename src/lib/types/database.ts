@@ -37,6 +37,13 @@ export interface Department {
   is_active: boolean;
 }
 
+export interface Room {
+  id_room: number;
+  name: string;
+  id_location: number; // references departments.id_department
+  is_active: boolean;
+}
+
 export interface Staff {
   id_staff: number;
   lastname: string;
@@ -123,6 +130,8 @@ export interface SecretarySettings {
 export interface WorkBlock {
   id_block: number;
   id_department: number;
+  id_room: number | null;
+  id_activity: number | null;
   id_calendar: number;
   date: string;
   period: Period;
@@ -214,6 +223,10 @@ export interface PlanningAssignment {
 export interface PlanningBlock {
   id_block: number;
   id_department: number;
+  id_room: number | null;
+  room_name: string | null;
+  id_activity: number | null;
+  activity_name: string | null;
   block_type: BlockType;
   assignments: PlanningAssignment[];
 }

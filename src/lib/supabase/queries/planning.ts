@@ -43,11 +43,15 @@ interface RawBlock {
   period: string;
   block_type: string;
   id_department: number;
+  id_room: number | null;
+  id_activity: number | null;
   departments: {
     name: string;
     id_site: number;
     sites: { name: string };
   };
+  rooms: { name: string } | null;
+  activity_templates: { name: string } | null;
   assignments: Array<{
     id_assignment: number;
     id_staff: number;
@@ -112,6 +116,10 @@ function transformBlock(raw: RawBlock, absentKeys: Set<string>): PlanningBlock {
   return {
     id_block: raw.id_block,
     id_department: raw.id_department,
+    id_room: raw.id_room ?? null,
+    room_name: raw.rooms?.name ?? null,
+    id_activity: raw.id_activity ?? null,
+    activity_name: raw.activity_templates?.name ?? null,
     block_type: raw.block_type as PlanningBlock["block_type"],
     assignments: activeAssignments.map((a) => ({
       id_assignment: a.id_assignment,
@@ -288,19 +296,54 @@ function extractVirtualSites(
     sites.push({ id_site: siteId, name: siteData.name, departments });
   }
 
-  // Bloc Opératoire last
+  // Bloc Opératoire last — group by room if rooms exist
   if (surgeryBlocks.length > 0) {
-    sites.push({
-      id_site: VIRTUAL_SITE_SURGERY,
-      name: "Bloc Opératoire",
-      departments: [
-        {
-          id_department: VIRTUAL_DEPT_SURGERY,
-          name: DEPT_BLOC_OPERATOIRE,
-          days: buildDays(surgeryBlocks),
-        },
-      ],
-    });
+    const roomMap = new Map<number, { name: string; blocks: RawBlock[] }>();
+    const noRoomBlocks: RawBlock[] = [];
+
+    for (const block of surgeryBlocks) {
+      if (block.id_room) {
+        if (!roomMap.has(block.id_room)) {
+          roomMap.set(block.id_room, {
+            name: block.rooms?.name ?? `Salle ${block.id_room}`,
+            blocks: [],
+          });
+        }
+        roomMap.get(block.id_room)!.blocks.push(block);
+      } else {
+        noRoomBlocks.push(block);
+      }
+    }
+
+    const surgeryDepts: PlanningDepartment[] = [];
+
+    // One PlanningDepartment per room (sorted by name)
+    for (const [roomId, roomData] of Array.from(roomMap.entries()).sort(
+      (a, b) => a[1].name.localeCompare(b[1].name)
+    )) {
+      surgeryDepts.push({
+        id_department: roomId,
+        name: roomData.name,
+        days: buildDays(roomData.blocks),
+      });
+    }
+
+    // Fallback: blocks without room → single virtual department
+    if (noRoomBlocks.length > 0) {
+      surgeryDepts.push({
+        id_department: VIRTUAL_DEPT_SURGERY,
+        name: DEPT_BLOC_OPERATOIRE,
+        days: buildDays(noRoomBlocks),
+      });
+    }
+
+    if (surgeryDepts.length > 0) {
+      sites.push({
+        id_site: VIRTUAL_SITE_SURGERY,
+        name: "Bloc Opératoire",
+        departments: surgeryDepts,
+      });
+    }
   }
 
   return sites;
@@ -348,11 +391,13 @@ function transformWeekData(
 // Fetchers
 // ============================================================
 
-const BLOCK_SELECT = `id_block, date, period, block_type, id_department,
+const BLOCK_SELECT = `id_block, date, period, block_type, id_department, id_room, id_activity,
   departments!inner (
     name, id_site,
     sites!inner ( name )
   ),
+  rooms ( name ),
+  activity_templates ( name ),
   assignments (
     id_assignment, id_staff, assignment_type, id_role, id_skill,
     id_activity, id_linked_doctor,

@@ -4,10 +4,11 @@ import { useState, useEffect } from "react";
 import { useAppStore } from "@/store/use-app-store";
 import { useQueryClient } from "@tanstack/react-query";
 import { toISODate } from "@/lib/utils/dates";
-import { X } from "lucide-react";
+import { X, CalendarOff } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { fetchStaffList, addStaffLeave } from "@/lib/supabase/queries";
 import { CustomSelect } from "@/components/ui/custom-select";
+import { cn } from "@/lib/utils";
 
 interface StaffOption {
   id_staff: number;
@@ -70,10 +71,15 @@ export function AbsenceDialog() {
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
       <div className="bg-card rounded-xl shadow-xl w-full max-w-md p-6 border border-border/50">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-foreground">
-            Déclarer une absence
-          </h3>
+        <div className="flex items-center justify-between mb-5">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 rounded-lg bg-warning/10">
+              <CalendarOff className="w-5 h-5 text-warning" />
+            </div>
+            <h3 className="text-base font-semibold text-foreground">
+              Déclarer une absence
+            </h3>
+          </div>
           <button onClick={close} className="text-muted-foreground hover:text-foreground transition-colors">
             <X className="w-5 h-5" />
           </button>
@@ -128,35 +134,45 @@ export function AbsenceDialog() {
             <label className="block text-sm font-medium text-foreground mb-1">
               Période
             </label>
-            <CustomSelect
-              value={period}
-              onChange={(v) => setPeriod(v as "AM" | "PM" | "")}
-              options={[
-                { value: "AM", label: "Matin (AM)" },
-                { value: "PM", label: "Après-midi (PM)" },
-              ]}
-              placeholder="Journée complète"
-              allowEmpty
-              className="w-full"
-            />
+            <div className="grid grid-cols-3 gap-2">
+              {([
+                { value: "AM" as const, label: "Matin" },
+                { value: "PM" as const, label: "Après-midi" },
+                { value: "" as const, label: "Journée" },
+              ]).map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setPeriod(opt.value)}
+                  className={cn(
+                    "px-3 py-2 text-sm font-medium rounded-lg border transition-colors",
+                    period === opt.value
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-card text-foreground border-border/50 hover:bg-muted/50"
+                  )}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           {result && (
             <div
-              className={`text-sm p-3 rounded-xl ${
+              className={`text-sm p-3 rounded-lg ${
                 result.startsWith("Erreur")
                   ? "bg-destructive/10 text-destructive"
-                  : "bg-success/10 text-success"
+                  : "bg-emerald-50 text-emerald-700 border border-emerald-200"
               }`}
             >
               {result}
             </div>
           )}
 
-          <div className="flex gap-2 justify-end pt-2">
+          <div className="flex gap-2 justify-end pt-4">
             <button
               onClick={close}
-              className="px-4 py-2 text-sm rounded-xl border border-border/50 text-foreground hover:bg-muted/50 transition-colors"
+              className="px-4 py-2 text-sm rounded-lg border border-border/50 text-foreground hover:bg-muted/50 transition-colors"
             >
               {result ? "Fermer" : "Annuler"}
             </button>
@@ -164,7 +180,7 @@ export function AbsenceDialog() {
               <button
                 onClick={handleSubmit}
                 disabled={!selectedStaffId || !startDate || !endDate || loading}
-                className="px-4 py-2 text-sm rounded-xl bg-warning text-white hover:bg-warning/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="px-4 py-2 text-sm rounded-lg bg-warning text-white hover:bg-warning/90 disabled:opacity-50 transition-colors"
               >
                 {loading ? "En cours..." : "Confirmer"}
               </button>

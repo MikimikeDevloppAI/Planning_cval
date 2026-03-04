@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { ChevronDown, Check } from "lucide-react";
+import { ChevronDown, Check, Plus, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Popover } from "./popover";
 
@@ -23,6 +23,12 @@ interface CustomSelectProps {
   className?: string;
   /** Disable the select */
   disabled?: boolean;
+  /** When provided, shows a "Créer" input at the top of the dropdown */
+  onCreate?: (name: string) => void;
+  /** Label for the create action. Default: "Créer..." */
+  createLabel?: string;
+  /** Whether the create mutation is pending */
+  isCreating?: boolean;
 }
 
 export function CustomSelect({
@@ -34,9 +40,14 @@ export function CustomSelect({
   size = "default",
   className,
   disabled = false,
+  onCreate,
+  createLabel = "Créer...",
+  isCreating = false,
 }: CustomSelectProps) {
   const [open, setOpen] = useState(false);
   const [anchor, setAnchor] = useState<DOMRect | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
+  const [createName, setCreateName] = useState("");
   const btnRef = useRef<HTMLButtonElement>(null);
 
   const selectedLabel = options.find((o) => o.value === value)?.label ?? placeholder;
@@ -48,6 +59,20 @@ export function CustomSelect({
       setAnchor(btnRef.current.getBoundingClientRect());
     }
     setOpen(true);
+  };
+
+  const handleClose = () => {
+    setOpen(false);
+    setShowCreate(false);
+    setCreateName("");
+  };
+
+  const handleCreate = () => {
+    if (!createName.trim() || !onCreate) return;
+    onCreate(createName.trim());
+    setCreateName("");
+    setShowCreate(false);
+    setOpen(false);
   };
 
   const isCompact = size === "compact";
@@ -63,11 +88,11 @@ export function CustomSelect({
           "focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40",
           isCompact
             ? "h-7 px-2 text-xs rounded-md"
-            : "h-8 px-3 text-sm rounded-lg",
+            : "h-[38px] px-3 text-sm rounded-xl",
           open
             ? "border-primary/40 bg-white shadow-sm"
-            : "border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm",
-          isPlaceholder ? "text-slate-400" : "text-slate-700",
+            : "border-border/50 bg-muted/30 hover:border-slate-300 hover:shadow-sm",
+          isPlaceholder ? "text-slate-500" : "text-slate-700",
           disabled && "opacity-50 cursor-not-allowed",
           className,
         )}
@@ -80,14 +105,60 @@ export function CustomSelect({
         )} />
       </button>
 
-      <Popover anchor={anchor} open={open} onClose={() => setOpen(false)} matchWidth>
+      <Popover anchor={anchor} open={open} onClose={handleClose} matchWidth>
         <div className="py-1 max-h-[240px] overflow-y-auto">
+          {/* Create new option — at the top */}
+          {onCreate && (
+            showCreate ? (
+              <div className="flex items-center gap-1 px-2 py-1.5 border-b border-border/20">
+                <input
+                  value={createName}
+                  onChange={(e) => setCreateName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleCreate();
+                    if (e.key === "Escape") {
+                      setShowCreate(false);
+                      setCreateName("");
+                    }
+                  }}
+                  placeholder={createLabel}
+                  className="flex-1 min-w-0 rounded border border-slate-200 bg-white px-2 py-1 text-[13px] text-slate-700 focus:outline-none focus:ring-1 focus:ring-primary/30"
+                  autoFocus
+                />
+                <button
+                  onClick={handleCreate}
+                  disabled={!createName.trim() || isCreating}
+                  className="p-0.5 text-emerald-600 hover:bg-emerald-50 rounded disabled:opacity-40"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => {
+                    setShowCreate(false);
+                    setCreateName("");
+                  }}
+                  className="p-0.5 text-muted-foreground hover:bg-muted/50 rounded"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setShowCreate(true)}
+                className="flex items-center gap-2 w-full text-left px-3 py-2 text-[13px] text-primary font-medium hover:bg-primary/5 transition-colors border-b border-border/20"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>{createLabel}</span>
+              </button>
+            )
+          )}
+
           {/* "All" / empty option — only when allowEmpty is true */}
           {allowEmpty && (
             <button
               onClick={() => {
                 onChange("");
-                setOpen(false);
+                handleClose();
               }}
               className={cn(
                 "flex items-center gap-2 w-full text-left px-3 py-2 text-[13px] transition-colors",
@@ -108,7 +179,7 @@ export function CustomSelect({
                 key={opt.value}
                 onClick={() => {
                   onChange(opt.value);
-                  setOpen(false);
+                  handleClose();
                 }}
                 className={cn(
                   "flex items-center gap-2 w-full text-left px-3 py-2 text-[13px] transition-colors",
